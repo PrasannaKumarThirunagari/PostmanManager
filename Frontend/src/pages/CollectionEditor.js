@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Button, Alert, Spinner, Table, Modal } from 'react-bootstrap';
 import apiService from '../services/api.service';
 
 const CollectionEditor = () => {
@@ -445,26 +444,56 @@ const CollectionEditor = () => {
     }
   };
 
+  const getMessageStyles = (type) => {
+    const baseStyles = "p-4 rounded-lg mb-6 border flex items-start gap-3";
+    switch (type) {
+      case 'success':
+        return `${baseStyles} bg-green-50 border-green-200 text-green-800`;
+      case 'danger':
+        return `${baseStyles} bg-red-50 border-red-200 text-red-800`;
+      case 'warning':
+        return `${baseStyles} bg-yellow-50 border-yellow-200 text-yellow-800`;
+      default:
+        return `${baseStyles} bg-blue-50 border-blue-200 text-blue-800`;
+    }
+  };
+
   return (
-    <div>
-      <h2 className="mb-4">Collection Editor</h2>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-4xl font-bold text-slate-900 mb-2">Collection Editor</h1>
+        <p className="text-slate-600">Edit and customize Postman collection requests</p>
+      </div>
       
       {message.text && (
-        <Alert variant={message.type} dismissible onClose={() => setMessage({ type: '', text: '' })}>
-          {message.text}
-        </Alert>
+        <div className={getMessageStyles(message.type)}>
+          <i className={`bi ${message.type === 'success' ? 'bi-check-circle-fill' : message.type === 'danger' ? 'bi-x-circle-fill' : 'bi-exclamation-triangle-fill'} text-xl flex-shrink-0`}></i>
+          <div className="flex-1">
+            <p className="font-medium">{message.text}</p>
+          </div>
+          <button
+            onClick={() => setMessage({ type: '', text: '' })}
+            className="text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <i className="bi bi-x-lg"></i>
+          </button>
+        </div>
       )}
 
-      <Card className="mb-4">
-        <Card.Header>
-          <h5 className="mb-0">Select Collection</h5>
-        </Card.Header>
-        <Card.Body>
-          <Form.Group>
-            <Form.Label>Postman Collection</Form.Label>
-            <Form.Select
+      <div className="card-modern mb-6">
+        <div className="bg-gradient-to-r from-orange-600 to-red-600 px-6 py-4">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <i className="bi bi-folder"></i>
+            Select Collection
+          </h2>
+        </div>
+        <div className="p-6">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Postman Collection</label>
+            <select
               value={selectedCollectionId}
               onChange={(e) => setSelectedCollectionId(e.target.value)}
+              className="select-modern"
             >
               <option value="">-- Select a collection --</option>
               {collections.map((collection) => (
@@ -472,151 +501,183 @@ const CollectionEditor = () => {
                   {collection.name}
                 </option>
               ))}
-            </Form.Select>
-          </Form.Group>
-        </Card.Body>
-      </Card>
+            </select>
+          </div>
+        </div>
+      </div>
 
       {selectedCollectionId && (
-        <Card>
-          <Card.Header className="d-flex justify-content-between align-items-center">
-            <h5 className="mb-0">Requests</h5>
-            <Button
-              variant="primary"
+        <div className="card-modern">
+          <div className="bg-gradient-to-r from-orange-600 to-red-600 px-6 py-4 flex justify-between items-center">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <i className="bi bi-list-ul"></i>
+              Requests
+            </h2>
+            <button
               onClick={handleSaveCollection}
               disabled={saving || collectionItems.length === 0}
+              className="bg-white text-orange-600 px-6 py-2 rounded-lg font-medium hover:bg-orange-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {saving ? (
                 <>
-                  <Spinner animation="border" size="sm" className="me-2" />
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
                   Saving...
                 </>
               ) : (
-                'Save Collection'
+                <>
+                  <i className="bi bi-save"></i>
+                  Save Collection
+                </>
               )}
-            </Button>
-          </Card.Header>
-          <Card.Body>
+            </button>
+          </div>
+          <div className="p-6">
             {loading ? (
-              <div className="text-center py-4">
-                <Spinner animation="border" />
-                <p className="mt-2">Loading requests...</p>
+              <div className="text-center py-12">
+                <svg className="animate-spin h-12 w-12 text-orange-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p className="text-slate-600">Loading requests...</p>
               </div>
             ) : collectionItems.length === 0 ? (
-              <Alert variant="info">No requests found in this collection.</Alert>
+              <div className="text-center py-12 bg-blue-50 rounded-lg border border-blue-100">
+                <i className="bi bi-info-circle text-blue-600 text-4xl mb-4"></i>
+                <p className="text-blue-800 font-medium">No requests found in this collection.</p>
+              </div>
             ) : (
-              <div className="table-responsive">
-                <Table striped bordered hover>
+              <div className="overflow-x-auto">
+                <table className="w-full">
                   <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Method</th>
-                      <th>URL</th>
-                      <th>Path</th>
-                      <th>Actions</th>
+                    <tr className="border-b border-slate-200">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Method</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">URL</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Path</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100">
                     {collectionItems.map((request) => (
-                      <tr key={request.id}>
-                        <td>{request.name}</td>
-                        <td>
-                          <span className="badge bg-primary">
+                      <tr key={request.id} className="hover:bg-slate-50 transition-colors duration-150">
+                        <td className="px-4 py-4 font-medium text-slate-900">{request.name}</td>
+                        <td className="px-4 py-4">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
                             {request.request?.method || 'N/A'}
                           </span>
                         </td>
-                        <td className="text-truncate" style={{ maxWidth: '300px' }}>
-                          {request.request?.url?.raw || 'N/A'}
+                        <td className="px-4 py-4">
+                          <div className="max-w-xs truncate text-slate-600 text-sm" title={request.request?.url?.raw || 'N/A'}>
+                            {request.request?.url?.raw || 'N/A'}
+                          </div>
                         </td>
-                        <td className="text-muted small">{request.path}</td>
-                        <td>
-                          <Button
-                            variant="outline-primary"
-                            size="sm"
-                            className="me-2"
-                            onClick={() => handleEdit(request)}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="outline-success"
-                            size="sm"
-                            className="me-2"
-                            onClick={() => handleClone(request)}
-                          >
-                            Clone
-                          </Button>
-                          <Button
-                            variant="outline-danger"
-                            size="sm"
-                            onClick={() => handleDelete(request.id)}
-                          >
-                            Delete
-                          </Button>
+                        <td className="px-4 py-4 text-slate-500 text-sm">{request.path}</td>
+                        <td className="px-4 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleEdit(request)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-all duration-200 text-sm font-medium"
+                            >
+                              <i className="bi bi-pencil"></i>
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleClone(request)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-all duration-200 text-sm font-medium"
+                            >
+                              <i className="bi bi-files"></i>
+                              Clone
+                            </button>
+                            <button
+                              onClick={() => handleDelete(request.id)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-all duration-200 text-sm font-medium"
+                            >
+                              <i className="bi bi-trash"></i>
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
-                </Table>
+                </table>
               </div>
             )}
-          </Card.Body>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Edit Modal */}
-      <Modal show={showEditModal} onHide={() => setShowEditModal(false)} size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>Edit Request: {editingRequest?.name}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form>
-            <Form.Group className="mb-3">
-              <Form.Label>Description</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={3}
-                value={editFormData.description}
-                onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
-                placeholder="Request description"
-              />
-            </Form.Group>
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowEditModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-white">Edit Request: {editingRequest?.name}</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-white hover:text-slate-200 transition-colors"
+              >
+                <i className="bi bi-x-lg text-2xl"></i>
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
+                <textarea
+                  rows={3}
+                  value={editFormData.description}
+                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                  placeholder="Request description"
+                  className="input-modern"
+                />
+              </div>
 
-            <Form.Group className="mb-3">
-              <Form.Label>Headers (JSON)</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={6}
-                value={editFormData.headers}
-                onChange={(e) => setEditFormData({ ...editFormData, headers: e.target.value })}
-                placeholder='[{"key": "Content-Type", "value": "application/json", "type": "text"}]'
-              />
-              <Form.Text className="text-muted">
-                Enter headers as JSON array
-              </Form.Text>
-            </Form.Group>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Headers (JSON)</label>
+                <textarea
+                  rows={6}
+                  value={editFormData.headers}
+                  onChange={(e) => setEditFormData({ ...editFormData, headers: e.target.value })}
+                  placeholder='[{"key": "Content-Type", "value": "application/json", "type": "text"}]'
+                  className="input-modern font-mono text-sm"
+                />
+                <p className="mt-1 text-sm text-slate-500">
+                  Enter headers as JSON array
+                </p>
+              </div>
 
-            <Form.Group className="mb-3">
-              <Form.Label>Body</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={8}
-                value={editFormData.body}
-                onChange={(e) => setEditFormData({ ...editFormData, body: e.target.value })}
-                placeholder="Request body content"
-              />
-            </Form.Group>
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowEditModal(false)}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={handleSaveEdit}>
-            Save Changes
-          </Button>
-        </Modal.Footer>
-      </Modal>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Body</label>
+                <textarea
+                  rows={8}
+                  value={editFormData.body}
+                  onChange={(e) => setEditFormData({ ...editFormData, body: e.target.value })}
+                  placeholder="Request body content"
+                  className="input-modern font-mono text-sm"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="btn-secondary-modern"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                className="btn-primary-modern"
+              >
+                <i className="bi bi-check-lg mr-2"></i>
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

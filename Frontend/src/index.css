@@ -1,42 +1,51 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 font-sans antialiased;
+  }
+
+  code {
+    @apply font-mono;
+  }
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
-}
+@layer components {
+  .sidebar {
+    @apply min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 border-r border-slate-700;
+  }
 
-/* Custom styles */
-.sidebar {
-  min-height: 100vh;
-  background-color: #f8f9fa;
-  border-right: 1px solid #dee2e6;
-}
+  .main-content {
+    @apply min-h-screen bg-transparent;
+  }
 
-.main-content {
-  min-height: 100vh;
-  background-color: #ffffff;
-}
+  .nav-link {
+    @apply text-slate-300 px-4 py-3 rounded-lg mx-2 mb-2 transition-all duration-200 flex items-center gap-3 hover:bg-slate-700 hover:text-white;
+  }
 
-.nav-link {
-  color: #495057;
-  padding: 0.75rem 1rem;
-  border-radius: 0.25rem;
-  margin: 0.25rem 0;
-}
+  .nav-link.active {
+    @apply bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/50;
+  }
 
-.nav-link:hover {
-  background-color: #e9ecef;
-  color: #212529;
-}
+  .card-modern {
+    @apply bg-white rounded-xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-slate-300/50;
+  }
 
-.nav-link.active {
-  background-color: #0d6efd;
-  color: #ffffff;
+  .btn-primary-modern {
+    @apply bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-2.5 rounded-lg font-medium shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 transform hover:scale-105 active:scale-95;
+  }
+
+  .btn-secondary-modern {
+    @apply bg-slate-100 text-slate-700 px-6 py-2.5 rounded-lg font-medium border border-slate-200 hover:bg-slate-200 hover:border-slate-300 transition-all duration-200;
+  }
+
+  .input-modern {
+    @apply w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white text-slate-900 placeholder-slate-400;
+  }
+
+  .select-modern {
+    @apply w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white text-slate-900 cursor-pointer;
+  }
 }

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Button, Alert, Spinner } from 'react-bootstrap';
 import apiService from '../services/api.service';
 
 // Default auth types - show all by default
@@ -191,10 +190,10 @@ const SwaggerConverter = () => {
     switch (selectedAuthType) {
       case 'apiKey':
         return (
-          <div>
-            <Form.Group className="mb-3">
-              <Form.Label>API Key Name</Form.Label>
-              <Form.Control
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">API Key Name</label>
+              <input
                 type="text"
                 placeholder="e.g., X-API-Key, api_key"
                 value={authValues.apiKey.key}
@@ -202,14 +201,15 @@ const SwaggerConverter = () => {
                   ...authValues,
                   apiKey: { ...authValues.apiKey, key: e.target.value }
                 })}
+                className="input-modern"
               />
-              <Form.Text className="text-muted">
+              <p className="mt-1 text-sm text-slate-500">
                 The name of the header or query parameter
-              </Form.Text>
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>API Key Value</Form.Label>
-              <Form.Control
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">API Key Value</label>
+              <input
                 type="text"
                 placeholder="Enter your API key"
                 value={authValues.apiKey.value}
@@ -217,30 +217,32 @@ const SwaggerConverter = () => {
                   ...authValues,
                   apiKey: { ...authValues.apiKey, value: e.target.value }
                 })}
+                className="input-modern"
               />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Location</Form.Label>
-              <Form.Select
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Location</label>
+              <select
                 value={authValues.apiKey.location}
                 onChange={(e) => setAuthValues({
                   ...authValues,
                   apiKey: { ...authValues.apiKey, location: e.target.value }
                 })}
+                className="select-modern"
               >
                 <option value="header">Header</option>
                 <option value="query">Query Parameter</option>
-              </Form.Select>
-            </Form.Group>
+              </select>
+            </div>
           </div>
         );
 
       case 'basic':
         return (
-          <div>
-            <Form.Group className="mb-3">
-              <Form.Label>Username</Form.Label>
-              <Form.Control
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Username</label>
+              <input
                 type="text"
                 placeholder="Enter username"
                 value={authValues.basic.username}
@@ -248,11 +250,12 @@ const SwaggerConverter = () => {
                   ...authValues,
                   basic: { ...authValues.basic, username: e.target.value }
                 })}
+                className="input-modern"
               />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Password</Form.Label>
-              <Form.Control
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
+              <input
                 type="password"
                 placeholder="Enter password"
                 value={authValues.basic.password}
@@ -260,16 +263,17 @@ const SwaggerConverter = () => {
                   ...authValues,
                   basic: { ...authValues.basic, password: e.target.value }
                 })}
+                className="input-modern"
               />
-            </Form.Group>
+            </div>
           </div>
         );
 
       case 'bearer':
         return (
-          <Form.Group className="mb-3">
-            <Form.Label>Bearer Token</Form.Label>
-            <Form.Control
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Bearer Token</label>
+            <input
               type="text"
               placeholder="Enter bearer token"
               value={authValues.bearer.token}
@@ -277,74 +281,72 @@ const SwaggerConverter = () => {
                 ...authValues,
                 bearer: { ...authValues.bearer, token: e.target.value }
               })}
+              className="input-modern"
             />
-            <Form.Text className="text-muted">
+            <p className="mt-1 text-sm text-slate-500">
               The bearer token value (without "Bearer " prefix)
-            </Form.Text>
-          </Form.Group>
+            </p>
+          </div>
         );
 
       case 'jwt':
         return (
-          <Form.Group className="mb-3">
-            <Form.Label>JWT Token</Form.Label>
-            <Form.Control
-              type="text"
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">JWT Token</label>
+            <textarea
               placeholder="Enter JWT token"
               value={authValues.jwt.token}
               onChange={(e) => setAuthValues({
                 ...authValues,
                 jwt: { ...authValues.jwt, token: e.target.value }
               })}
-              as="textarea"
               rows={3}
+              className="input-modern"
             />
-            <Form.Text className="text-muted">
+            <p className="mt-1 text-sm text-slate-500">
               Paste your JWT token here
-            </Form.Text>
-          </Form.Group>
+            </p>
+          </div>
         );
 
       case 'oauth2':
         return (
-          <Form.Group className="mb-3">
-            <Form.Label>OAuth 2.0 Access Token</Form.Label>
-            <Form.Control
-              type="text"
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">OAuth 2.0 Access Token</label>
+            <textarea
               placeholder="Enter OAuth 2.0 access token"
               value={authValues.oauth2.token}
               onChange={(e) => setAuthValues({
                 ...authValues,
                 oauth2: { ...authValues.oauth2, token: e.target.value }
               })}
-              as="textarea"
               rows={3}
+              className="input-modern"
             />
-            <Form.Text className="text-muted">
+            <p className="mt-1 text-sm text-slate-500">
               Paste your OAuth 2.0 access token here
-            </Form.Text>
-          </Form.Group>
+            </p>
+          </div>
         );
 
       case 'openIdConnect':
         return (
-          <Form.Group className="mb-3">
-            <Form.Label>OpenID Connect Token</Form.Label>
-            <Form.Control
-              type="text"
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">OpenID Connect Token</label>
+            <textarea
               placeholder="Enter OpenID Connect token"
               value={authValues.openIdConnect.token}
               onChange={(e) => setAuthValues({
                 ...authValues,
                 openIdConnect: { ...authValues.openIdConnect, token: e.target.value }
               })}
-              as="textarea"
               rows={3}
+              className="input-modern"
             />
-            <Form.Text className="text-muted">
+            <p className="mt-1 text-sm text-slate-500">
               Paste your OpenID Connect token here
-            </Form.Text>
-          </Form.Group>
+            </p>
+          </div>
         );
 
       default:
@@ -352,154 +354,198 @@ const SwaggerConverter = () => {
     }
   };
 
+  const getMessageStyles = (type) => {
+    const baseStyles = "p-4 rounded-lg mb-6 border flex items-start gap-3";
+    switch (type) {
+      case 'success':
+        return `${baseStyles} bg-green-50 border-green-200 text-green-800`;
+      case 'danger':
+        return `${baseStyles} bg-red-50 border-red-200 text-red-800`;
+      case 'warning':
+        return `${baseStyles} bg-yellow-50 border-yellow-200 text-yellow-800`;
+      default:
+        return `${baseStyles} bg-blue-50 border-blue-200 text-blue-800`;
+    }
+  };
+
   return (
-    <div>
-      <h2 className="mb-4">Swagger Converter</h2>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-4xl font-bold text-slate-900 mb-2">Swagger Converter</h1>
+        <p className="text-slate-600">Convert your Swagger/OpenAPI specifications to Postman collections</p>
+      </div>
       
       {message.text && (
-        <Alert variant={message.type} dismissible onClose={() => setMessage({ type: '', text: '' })}>
-          {message.text}
-        </Alert>
+        <div className={getMessageStyles(message.type)}>
+          <i className={`bi ${message.type === 'success' ? 'bi-check-circle-fill' : message.type === 'danger' ? 'bi-x-circle-fill' : 'bi-exclamation-triangle-fill'} text-xl flex-shrink-0`}></i>
+          <div className="flex-1">
+            <p className="font-medium">{message.text}</p>
+          </div>
+          <button
+            onClick={() => setMessage({ type: '', text: '' })}
+            className="text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <i className="bi bi-x-lg"></i>
+          </button>
+        </div>
       )}
 
-      <Card>
-        <Card.Header>
-          <h5 className="mb-0">Convert Swagger to Postman</h5>
-        </Card.Header>
-        <Card.Body>
-          <Form>
-            <Form.Group className="mb-3">
-              <Form.Label>Select Swagger File</Form.Label>
-              <Form.Select
-                value={selectedFile}
-                onChange={(e) => setSelectedFile(e.target.value)}
-              >
-                <option value="">-- Select a Swagger file --</option>
-                {swaggerFiles.map((file) => (
-                  <option key={file.id} value={file.id}>
-                    {file.name}
-                  </option>
-                ))}
-              </Form.Select>
-            </Form.Group>
-
-            <Form.Group className="mb-3">
-              <Form.Label>Authorization Type</Form.Label>
-              <Form.Select
-                value={selectedAuthType}
-                onChange={(e) => setSelectedAuthType(e.target.value)}
-                disabled={loadingAuthTypes}
-              >
-                <option value="">
-                  {loadingAuthTypes
-                    ? '-- Loading authorization types... --'
-                    : '-- Select authorization type --'}
+      <div className="card-modern">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <i className="bi bi-arrow-repeat"></i>
+            Convert Swagger to Postman
+          </h2>
+        </div>
+        <div className="p-6 space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              <i className="bi bi-file-earmark-code mr-2"></i>Select Swagger File
+            </label>
+            <select
+              value={selectedFile}
+              onChange={(e) => setSelectedFile(e.target.value)}
+              className="select-modern"
+            >
+              <option value="">-- Select a Swagger file --</option>
+              {swaggerFiles.map((file) => (
+                <option key={file.id} value={file.id}>
+                  {file.name}
                 </option>
-                {authorizationTypes.map((authType, index) => (
-                  <option key={authType.value + index} value={authType.value}>
-                    {authType.label}
-                  </option>
-                ))}
-              </Form.Select>
-              {loadingAuthTypes && (
-                <Form.Text className="text-muted">
-                  <Spinner animation="border" size="sm" className="me-2" />
-                  Loading authorization types from Swagger file...
-                </Form.Text>
-              )}
-              {!loadingAuthTypes && selectedFile && (
-                <Form.Text className="text-muted">
-                  All authorization types are shown. Types from the Swagger file are prioritized.
-                </Form.Text>
-              )}
-            </Form.Group>
+              ))}
+            </select>
+          </div>
 
-            {selectedAuthType && (
-              <Card className="mb-3" style={{ backgroundColor: '#f8f9fa' }}>
-                <Card.Body>
-                  <Card.Title className="h6 mb-3">Authorization Configuration</Card.Title>
-                  {renderAuthInputs()}
-                </Card.Body>
-              </Card>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              <i className="bi bi-shield-lock mr-2"></i>Authorization Type
+            </label>
+            <select
+              value={selectedAuthType}
+              onChange={(e) => setSelectedAuthType(e.target.value)}
+              disabled={loadingAuthTypes}
+              className="select-modern disabled:bg-slate-100 disabled:cursor-not-allowed"
+            >
+              <option value="">
+                {loadingAuthTypes
+                  ? '-- Loading authorization types... --'
+                  : '-- Select authorization type --'}
+              </option>
+              {authorizationTypes.map((authType, index) => (
+                <option key={authType.value + index} value={authType.value}>
+                  {authType.label}
+                </option>
+              ))}
+            </select>
+            {loadingAuthTypes && (
+              <p className="mt-2 text-sm text-slate-500 flex items-center gap-2">
+                <svg className="animate-spin h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Loading authorization types from Swagger file...
+              </p>
             )}
+            {!loadingAuthTypes && selectedFile && (
+              <p className="mt-2 text-sm text-slate-500">
+                All authorization types are shown. Types from the Swagger file are prioritized.
+              </p>
+            )}
+          </div>
 
-            <Form.Group className="mb-3">
-              <Form.Label>Security Injections</Form.Label>
-              <div>
-                <Form.Check
-                  type="checkbox"
-                  label="XSS Injections"
-                  checked={injections.xss}
-                  onChange={(e) => setInjections({ ...injections, xss: e.target.checked })}
-                />
-                <Form.Check
-                  type="checkbox"
-                  label="SQL Injections"
-                  checked={injections.sql}
-                  onChange={(e) => setInjections({ ...injections, sql: e.target.checked })}
-                />
-                <Form.Check
-                  type="checkbox"
-                  label="HTML Injections"
-                  checked={injections.html}
-                  onChange={(e) => setInjections({ ...injections, html: e.target.checked })}
-                />
-              </div>
-            </Form.Group>
+          {selectedAuthType && (
+            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
+              <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                <i className="bi bi-gear-fill text-blue-600"></i>
+                Authorization Configuration
+              </h3>
+              {renderAuthInputs()}
+            </div>
+          )}
 
-            <Form.Group className="mb-3">
-              <Form.Label>Environment Files</Form.Label>
-              <div>
-                <Form.Check
-                  type="checkbox"
-                  label="Local"
-                  checked={environments.local}
-                  onChange={(e) => setEnvironments({ ...environments, local: e.target.checked })}
-                />
-                <Form.Check
-                  type="checkbox"
-                  label="Dev"
-                  checked={environments.dev}
-                  onChange={(e) => setEnvironments({ ...environments, dev: e.target.checked })}
-                />
-                <Form.Check
-                  type="checkbox"
-                  label="QA"
-                  checked={environments.qa}
-                  onChange={(e) => setEnvironments({ ...environments, qa: e.target.checked })}
-                />
-                <Form.Check
-                  type="checkbox"
-                  label="UAT"
-                  checked={environments.uat}
-                  onChange={(e) => setEnvironments({ ...environments, uat: e.target.checked })}
-                />
-                <Form.Check
-                  type="checkbox"
-                  label="PROD"
-                  checked={environments.prod}
-                  onChange={(e) => setEnvironments({ ...environments, prod: e.target.checked })}
-                />
-              </div>
-            </Form.Group>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-3">
+              <i className="bi bi-shield-exclamation mr-2"></i>Security Injections
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {[
+                { key: 'xss', label: 'XSS Injections', icon: 'bi-bug' },
+                { key: 'sql', label: 'SQL Injections', icon: 'bi-database-exclamation' },
+                { key: 'html', label: 'HTML Injections', icon: 'bi-code-square' },
+              ].map((injection) => (
+                <label
+                  key={injection.key}
+                  className="flex items-center gap-3 p-4 bg-white border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-all duration-200"
+                >
+                  <input
+                    type="checkbox"
+                    checked={injections[injection.key]}
+                    onChange={(e) => setInjections({ ...injections, [injection.key]: e.target.checked })}
+                    className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex items-center gap-2">
+                    <i className={`bi ${injection.icon} text-slate-600`}></i>
+                    <span className="text-sm font-medium text-slate-700">{injection.label}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
 
-            <Button
-              variant="primary"
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-3">
+              <i className="bi bi-globe mr-2"></i>Environment Files
+            </label>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {[
+                { key: 'local', label: 'Local', color: 'purple' },
+                { key: 'dev', label: 'Dev', color: 'blue' },
+                { key: 'qa', label: 'QA', color: 'yellow' },
+                { key: 'uat', label: 'UAT', color: 'orange' },
+                { key: 'prod', label: 'PROD', color: 'red' },
+              ].map((env) => (
+                <label
+                  key={env.key}
+                  className={`flex items-center gap-2 p-3 bg-white border-2 rounded-lg cursor-pointer hover:border-${env.color}-400 transition-all duration-200 ${
+                    environments[env.key] ? `border-${env.color}-500 bg-${env.color}-50` : 'border-slate-200'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={environments[env.key]}
+                    onChange={(e) => setEnvironments({ ...environments, [env.key]: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-slate-700">{env.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-slate-200">
+            <button
               onClick={handleConvert}
               disabled={loading || !selectedFile}
+              className="btn-primary-modern disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
             >
               {loading ? (
                 <>
-                  <Spinner animation="border" size="sm" className="me-2" />
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
                   Converting...
                 </>
               ) : (
-                'Convert'
+                <>
+                  <i className="bi bi-arrow-repeat"></i>
+                  Convert to Postman
+                </>
               )}
-            </Button>
-          </Form>
-        </Card.Body>
-      </Card>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

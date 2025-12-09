@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Button, Alert, Spinner, Table, Badge, Row, Col, InputGroup } from 'react-bootstrap';
 import apiService from '../services/api.service';
 
 const GridFiltering = () => {
@@ -492,483 +491,523 @@ const GridFiltering = () => {
     }
   };
 
+  const getMessageStyles = (type) => {
+    const baseStyles = "p-4 rounded-lg mb-6 border flex items-start gap-3";
+    switch (type) {
+      case 'success':
+        return `${baseStyles} bg-green-50 border-green-200 text-green-800`;
+      case 'danger':
+        return `${baseStyles} bg-red-50 border-red-200 text-red-800`;
+      case 'warning':
+        return `${baseStyles} bg-yellow-50 border-yellow-200 text-yellow-800`;
+      default:
+        return `${baseStyles} bg-blue-50 border-blue-200 text-blue-800`;
+    }
+  };
+
   return (
-    <div>
-      <h2 className="mb-4">Postman Grid Filtering</h2>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-4xl font-bold text-slate-900 mb-2">Postman Grid Filtering</h1>
+        <p className="text-slate-600">Generate filtered requests based on response attributes</p>
+      </div>
       
       {message.text && (
-        <Alert variant={message.type} dismissible onClose={() => setMessage({ type: '', text: '' })}>
-          {message.text}
-        </Alert>
+        <div className={getMessageStyles(message.type)}>
+          <i className={`bi ${message.type === 'success' ? 'bi-check-circle-fill' : message.type === 'danger' ? 'bi-x-circle-fill' : 'bi-exclamation-triangle-fill'} text-xl flex-shrink-0`}></i>
+          <div className="flex-1">
+            <p className="font-medium">{message.text}</p>
+          </div>
+          <button
+            onClick={() => setMessage({ type: '', text: '' })}
+            className="text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <i className="bi bi-x-lg"></i>
+          </button>
+        </div>
       )}
 
       {/* Section 1: Collection and Endpoint Selection */}
-      <Card className="mb-4">
-        <Card.Header>
-          <h5 className="mb-0">Section 1: Select Collection and Endpoint</h5>
-        </Card.Header>
-        <Card.Body>
-          <Row>
-            <Col md={6}>
-          <Form.Group className="mb-3">
-            <Form.Label>Postman Collection</Form.Label>
-            <Form.Select
-              value={selectedCollectionId}
-              onChange={(e) => setSelectedCollectionId(e.target.value)}
-              disabled={loading}
-            >
-              <option value="">-- Select a collection --</option>
-              {collections.map((collection) => (
-                <option key={collection.id} value={collection.id}>
-                  {collection.name}
-                </option>
-              ))}
-            </Form.Select>
-          </Form.Group>
-            </Col>
-            <Col md={6}>
-            <Form.Group className="mb-3">
-                <Form.Label>Endpoint</Form.Label>
+      <div className="card-modern mb-6">
+        <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-4">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <i className="bi bi-1-circle"></i>
+            Section 1: Select Collection and Endpoint
+          </h2>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Postman Collection</label>
+              <select
+                value={selectedCollectionId}
+                onChange={(e) => setSelectedCollectionId(e.target.value)}
+                disabled={loading}
+                className="select-modern disabled:bg-slate-100 disabled:cursor-not-allowed"
+              >
+                <option value="">-- Select a collection --</option>
+                {collections.map((collection) => (
+                  <option key={collection.id} value={collection.id}>
+                    {collection.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Endpoint</label>
               {loadingRequests ? (
-                <div className="text-center py-2">
-                  <Spinner animation="border" size="sm" className="me-2" />
-                    Loading endpoints...
+                <div className="flex items-center gap-2 text-slate-600 py-2">
+                  <svg className="animate-spin h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Loading endpoints...
                 </div>
               ) : (
-                <Form.Select
+                <select
                   value={selectedRequestId}
                   onChange={(e) => setSelectedRequestId(e.target.value)}
-                    disabled={!selectedCollectionId}
+                  disabled={!selectedCollectionId}
+                  className="select-modern disabled:bg-slate-100 disabled:cursor-not-allowed"
                 >
-                    <option value="">-- Select an endpoint --</option>
+                  <option value="">-- Select an endpoint --</option>
                   {requests.map((request) => (
                     <option key={request.id} value={request.id}>
-                        {request.name} ({request.request?.method || 'N/A'})
+                      {request.name} ({request.request?.method || 'N/A'})
                     </option>
                   ))}
-                </Form.Select>
+                </select>
               )}
-            </Form.Group>
-            </Col>
-          </Row>
-        </Card.Body>
-      </Card>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {selectedRequest && (
         <>
           {/* Section 2: Request and Response Display */}
-          <Row className="mb-4">
-            <Col md={6}>
-              <Card>
-                <Card.Header>
-                  <h5 className="mb-0">Section 2: Request Body</h5>
-                </Card.Header>
-                <Card.Body>
-                  {requestBody ? (
-                    <div>
-                      <pre style={{ 
-                        maxHeight: '400px', 
-                        overflow: 'auto', 
-                        backgroundColor: '#f8f9fa', 
-                        padding: '15px', 
-                        borderRadius: '5px',
-                        fontSize: '12px'
-                      }}>
-                        {typeof requestBody.parsed === 'object' 
-                          ? JSON.stringify(requestBody.parsed, null, 2)
-                          : requestBody.raw}
-                      </pre>
-                    </div>
-                  ) : (
-                    <Alert variant="info">No request body available</Alert>
-                  )}
-                </Card.Body>
-              </Card>
-            </Col>
-            <Col md={6}>
-        <Card>
-          <Card.Header className="d-flex justify-content-between align-items-center">
-                  <h5 className="mb-0">Section 2: Response Body</h5>
-                  {responses.length > 0 && (
-                    <Form.Select
-                      size="sm"
-                      style={{ width: 'auto' }}
-                      value={selectedResponse ? `${selectedResponse.code || selectedResponse.status}` : ''}
-                      onChange={(e) => {
-                        const status = e.target.value;
-                        const found = responses.find(r => String(r.code || r.status) === status);
-                        if (found) handleResponseSelect(found);
-                      }}
-                    >
-                      <option value="">Select response...</option>
-                      {responses.map((r, idx) => (
-                        <option key={idx} value={r.code || r.status}>
-                          {r.code || r.status} - {r.name || `Response ${idx + 1}`}
-                        </option>
-                      ))}
-                    </Form.Select>
-                  )}
-                </Card.Header>
-                <Card.Body>
-                  {responseBody ? (
-                    <div>
-                      <pre style={{ 
-                        maxHeight: '400px', 
-                        overflow: 'auto', 
-                        backgroundColor: '#f8f9fa', 
-                        padding: '15px', 
-                        borderRadius: '5px',
-                        fontSize: '12px'
-                      }}>
-                        {typeof responseBody.parsed === 'object' 
-                          ? JSON.stringify(responseBody.parsed, null, 2)
-                          : responseBody.raw}
-                      </pre>
-                    </div>
-                  ) : (
-                    <Alert variant="info">
-                      {responses.length > 0 
-                        ? 'Please select a response from the dropdown above'
-                        : 'No response examples available for this request'}
-                    </Alert>
-                  )}
-                </Card.Body>
-              </Card>
-            </Col>
-          </Row>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div className="card-modern">
+              <div className="bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-4">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <i className="bi bi-2-circle"></i>
+                  Section 2: Request Body
+                </h2>
+              </div>
+              <div className="p-6">
+                {requestBody ? (
+                  <div>
+                    <pre className="max-h-[400px] overflow-auto bg-slate-100 p-4 rounded-lg text-xs font-mono">
+                      {typeof requestBody.parsed === 'object' 
+                        ? JSON.stringify(requestBody.parsed, null, 2)
+                        : requestBody.raw}
+                    </pre>
+                  </div>
+                ) : (
+                  <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg">
+                    <i className="bi bi-info-circle mr-2"></i>
+                    No request body available
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="card-modern">
+              <div className="bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-4 flex justify-between items-center">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <i className="bi bi-2-circle"></i>
+                  Section 2: Response Body
+                </h2>
+                {responses.length > 0 && (
+                  <select
+                    className="px-3 py-1.5 text-sm border border-white/30 rounded-lg bg-white/20 text-white focus:ring-2 focus:ring-white/50 focus:border-white transition-all"
+                    value={selectedResponse ? `${selectedResponse.code || selectedResponse.status}` : ''}
+                    onChange={(e) => {
+                      const status = e.target.value;
+                      const found = responses.find(r => String(r.code || r.status) === status);
+                      if (found) handleResponseSelect(found);
+                    }}
+                  >
+                    <option value="">Select response...</option>
+                    {responses.map((r, idx) => (
+                      <option key={idx} value={r.code || r.status}>
+                        {r.code || r.status} - {r.name || `Response ${idx + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div className="p-6">
+                {responseBody ? (
+                  <div>
+                    <pre className="max-h-[400px] overflow-auto bg-slate-100 p-4 rounded-lg text-xs font-mono">
+                      {typeof responseBody.parsed === 'object' 
+                        ? JSON.stringify(responseBody.parsed, null, 2)
+                        : responseBody.raw}
+                    </pre>
+                  </div>
+                ) : (
+                  <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg">
+                    <i className="bi bi-info-circle mr-2"></i>
+                    {responses.length > 0 
+                      ? 'Please select a response from the dropdown above'
+                      : 'No response examples available for this request'}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
 
           {/* Section 3: Mapping Area - Field Mapping Configuration */}
           {responseBody && Object.keys(responseAttributes).length > 0 && (
             <>
               {/* Request Body Attribute Mapping */}
               {requestBody && requestBodyAttributes.length > 0 && (
-                <Card className="mb-4">
-                  <Card.Header>
-                    <h5 className="mb-0">Section 3: Request Body Attribute Mapping</h5>
-                  </Card.Header>
-                  <Card.Body>
-                    <Alert variant="info" className="mb-3">
+                <div className="card-modern mb-6">
+                  <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-4">
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      <i className="bi bi-3-circle"></i>
+                      Section 3: Request Body Attribute Mapping
+                    </h2>
+                  </div>
+                  <div className="p-6">
+                    <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg mb-4">
                       <strong>Map Request Body Attributes:</strong> Configure how each request body attribute should be populated in generated requests.
-                    </Alert>
-                    <Table striped bordered hover>
-                      <thead>
-                        <tr>
-                          <th style={{ width: '20%' }}>Request Field</th>
-                          <th style={{ width: '15%' }}>Mapping Mode</th>
-                          <th style={{ width: '30%' }}>Source/Value</th>
-                          <th style={{ width: '10%' }}>Enabled</th>
-                          <th style={{ width: '25%' }}>Description</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {requestBodyAttributes.map((attr) => {
-                          const mapping = requestBodyMappings[attr] || { mode: 'none', source: '', value: '', enabled: true };
-                          return (
-                            <tr key={attr}>
-                              <td><strong>{attr}</strong></td>
-                              <td>
-                                <Form.Select
-                                  size="sm"
-                                  value={mapping.mode}
-                                  onChange={(e) => {
-                                    setRequestBodyMappings({
-                                      ...requestBodyMappings,
-                                      [attr]: {
-                                        ...mapping,
-                                        mode: e.target.value,
-                                        source: '',
-                                        value: ''
-                                      }
-                                    });
-                                  }}
-                                >
-                                  <option value="none">No Mapping</option>
-                                  <option value="response">From Response</option>
-                                  <option value="manual">Manual Value</option>
-                                  <option value="special">Special Value</option>
-                                </Form.Select>
-                              </td>
-                              <td>
-                                {mapping.mode === 'response' && (
-                                  <Form.Select
-                                    size="sm"
-                                    value={mapping.source}
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-slate-200">
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '20%' }}>Request Field</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '15%' }}>Mapping Mode</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '30%' }}>Source/Value</th>
+                            <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '10%' }}>Enabled</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '25%' }}>Description</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {requestBodyAttributes.map((attr) => {
+                            const mapping = requestBodyMappings[attr] || { mode: 'none', source: '', value: '', enabled: true };
+                            return (
+                              <tr key={attr} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-4 py-4 font-semibold text-slate-900">{attr}</td>
+                                <td className="px-4 py-4">
+                                  <select
+                                    className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    value={mapping.mode}
                                     onChange={(e) => {
                                       setRequestBodyMappings({
                                         ...requestBodyMappings,
-                                        [attr]: { ...mapping, source: e.target.value }
+                                        [attr]: {
+                                          ...mapping,
+                                          mode: e.target.value,
+                                          source: '',
+                                          value: ''
+                                        }
                                       });
                                     }}
                                   >
-                                    <option value="">-- Select Response Attribute --</option>
-                                    {Object.keys(responseAttributes).map(respAttr => (
-                                      <option key={respAttr} value={respAttr}>{respAttr}</option>
-                                    ))}
-                                  </Form.Select>
-                                )}
-                                {mapping.mode === 'manual' && (
-                                  <Form.Control
-                                    size="sm"
-                                    type="text"
-                                    placeholder="Enter value"
-                                    value={mapping.value}
+                                    <option value="none">No Mapping</option>
+                                    <option value="response">From Response</option>
+                                    <option value="manual">Manual Value</option>
+                                    <option value="special">Special Value</option>
+                                  </select>
+                                </td>
+                                <td className="px-4 py-4">
+                                  {mapping.mode === 'response' && (
+                                    <select
+                                      className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                      value={mapping.source}
+                                      onChange={(e) => {
+                                        setRequestBodyMappings({
+                                          ...requestBodyMappings,
+                                          [attr]: { ...mapping, source: e.target.value }
+                                        });
+                                      }}
+                                    >
+                                      <option value="">-- Select Response Attribute --</option>
+                                      {Object.keys(responseAttributes).map(respAttr => (
+                                        <option key={respAttr} value={respAttr}>{respAttr}</option>
+                                      ))}
+                                    </select>
+                                  )}
+                                  {mapping.mode === 'manual' && (
+                                    <input
+                                      type="text"
+                                      placeholder="Enter value"
+                                      value={mapping.value}
+                                      onChange={(e) => {
+                                        setRequestBodyMappings({
+                                          ...requestBodyMappings,
+                                          [attr]: { ...mapping, value: e.target.value }
+                                        });
+                                      }}
+                                      className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                  )}
+                                  {mapping.mode === 'special' && (
+                                    <select
+                                      className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                      value={mapping.source}
+                                      onChange={(e) => {
+                                        setRequestBodyMappings({
+                                          ...requestBodyMappings,
+                                          [attr]: { ...mapping, source: e.target.value }
+                                        });
+                                      }}
+                                    >
+                                      <option value="">-- Select Special Value --</option>
+                                      <option value="attributeName">Attribute Name (from response)</option>
+                                      <option value="objectType">Object Type (user input)</option>
+                                      <option value="dataType">Data Type (from response)</option>
+                                      <option value="condition">Condition (EQ, NEQ, etc.)</option>
+                                      <option value="attributeValue">Attribute Value (template)</option>
+                                    </select>
+                                  )}
+                                  {mapping.mode === 'none' && (
+                                    <span className="text-slate-400">-</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-4 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={mapping.enabled}
                                     onChange={(e) => {
                                       setRequestBodyMappings({
                                         ...requestBodyMappings,
-                                        [attr]: { ...mapping, value: e.target.value }
+                                        [attr]: { ...mapping, enabled: e.target.checked }
                                       });
                                     }}
+                                    className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
                                   />
-                                )}
-                                {mapping.mode === 'special' && (
-                                  <Form.Select
-                                    size="sm"
-                                    value={mapping.source}
-                                    onChange={(e) => {
-                                      setRequestBodyMappings({
-                                        ...requestBodyMappings,
-                                        [attr]: { ...mapping, source: e.target.value }
-                                      });
-                                    }}
-                                  >
-                                    <option value="">-- Select Special Value --</option>
-                                    <option value="attributeName">Attribute Name (from response)</option>
-                                    <option value="objectType">Object Type (user input)</option>
-                                    <option value="dataType">Data Type (from response)</option>
-                                    <option value="condition">Condition (EQ, NEQ, etc.)</option>
-                                    <option value="attributeValue">Attribute Value (template)</option>
-                                  </Form.Select>
-                                )}
-                                {mapping.mode === 'none' && (
-                                  <span className="text-muted">-</span>
-                                )}
-                              </td>
-                              <td className="text-center">
-                                <Form.Check
-                                  type="switch"
-                                  checked={mapping.enabled}
-                                  onChange={(e) => {
-                                    setRequestBodyMappings({
-                                      ...requestBodyMappings,
-                                      [attr]: { ...mapping, enabled: e.target.checked }
-                                    });
-                                  }}
-                                />
-                              </td>
-                              <td>
-                                <small className="text-muted">
-                                  {mapping.mode === 'response' && 'Maps from response attribute'}
-                                  {mapping.mode === 'manual' && 'Uses fixed manual value'}
-                                  {mapping.mode === 'special' && 'Uses special system value'}
-                                  {mapping.mode === 'none' && 'Not mapped - will use original value'}
-                                </small>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </Table>
-                  </Card.Body>
-                </Card>
+                                </td>
+                                <td className="px-4 py-4">
+                                  <span className="text-sm text-slate-500">
+                                    {mapping.mode === 'response' && 'Maps from response attribute'}
+                                    {mapping.mode === 'manual' && 'Uses fixed manual value'}
+                                    {mapping.mode === 'special' && 'Uses special system value'}
+                                    {mapping.mode === 'none' && 'Not mapped - will use original value'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* Field Mapping Configuration */}
-              <Card className="mb-4">
-                <Card.Header>
-                  <h5 className="mb-0">Section 3: Field Mapping Configuration</h5>
-                </Card.Header>
-                <Card.Body>
+              <div className="card-modern mb-6">
+                <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-4">
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <i className="bi bi-3-circle"></i>
+                    Section 3: Field Mapping Configuration
+                  </h2>
+                </div>
+                <div className="p-6 space-y-4">
                   {/* Object Type Input */}
-                  <Card className="mb-4" style={{ backgroundColor: '#f8f9fa' }}>
-                    <Card.Body>
-                      <Form.Group className="mb-3">
-                        <Form.Label><strong>Object Type</strong> (Applied to all requests)</Form.Label>
-                        <Form.Control
-                          type="text"
-                          placeholder="e.g., Portfolio, User, Product, etc."
-                          value={fieldMappings.objectType.value}
-                          onChange={(e) => setFieldMappings({
-                            ...fieldMappings,
-                            objectType: { ...fieldMappings.objectType, value: e.target.value }
-                          })}
-                        />
-                        <Form.Text className="text-muted">
-                          This value will be applied to all generated requests as the `objectType` field (if mapped)
-                        </Form.Text>
-                      </Form.Group>
-                    </Card.Body>
-                  </Card>
+                  <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        <strong>Object Type</strong> (Applied to all requests)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g., Portfolio, User, Product, etc."
+                        value={fieldMappings.objectType.value}
+                        onChange={(e) => setFieldMappings({
+                          ...fieldMappings,
+                          objectType: { ...fieldMappings.objectType, value: e.target.value }
+                        })}
+                        className="input-modern"
+                      />
+                      <p className="mt-2 text-sm text-slate-500">
+                        This value will be applied to all generated requests as the `objectType` field (if mapped)
+                      </p>
+                    </div>
+                  </div>
 
-                {/* Condition Generation Mode */}
-                <Card className="mb-4">
-                  <Card.Body>
-              <Form.Group className="mb-3">
-                      <Form.Check
-                        type="checkbox"
-                        label="Generate all conditions for each attribute"
-                        checked={generateAllConditions}
-                        onChange={(e) => setGenerateAllConditions(e.target.checked)}
-                />
-                <Form.Text className="text-muted">
+                  {/* Condition Generation Mode */}
+                  <div className="bg-white rounded-xl p-6 border border-slate-200">
+                    <div>
+                      <label className="flex items-center gap-3 mb-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={generateAllConditions}
+                          onChange={(e) => setGenerateAllConditions(e.target.checked)}
+                          className="w-5 h-5 text-indigo-600 border-slate-300 rounded focus:ring-2 focus:ring-indigo-500"
+                        />
+                        <span className="font-medium text-slate-700">Generate all conditions for each attribute</span>
+                      </label>
+                      <p className="mt-2 text-sm text-slate-500 ml-8">
                         If checked, generates requests for all applicable conditions per attribute. 
                         If unchecked, you can select specific conditions per attribute below.
-                </Form.Text>
-              </Form.Group>
-          </Card.Body>
-        </Card>
+                      </p>
+                    </div>
+                  </div>
 
-                {/* Response Attributes with Condition Selection */}
-                <Card>
-          <Card.Body>
-                    <h6 className="mb-3">Response Attributes and Condition Selection</h6>
-                    <Table striped bordered hover size="sm">
-                  <thead>
-                    <tr>
-                          <th style={{ width: '25%' }}>Attribute Name</th>
-                          <th style={{ width: '15%' }}>Data Type</th>
-                          <th style={{ width: '10%' }}>Nullable</th>
-                          <th style={{ width: '50%' }}>Select Conditions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                        {Object.entries(responseAttributes).map(([attrName, attrData]) => {
-                          const dataType = attrData.type || 'string';
-                          // Get conditions from cache or use fallback
-                          let availableConditions = conditionsCache[dataType] || conditionsCache[dataType.toLowerCase()];
-                          if (!availableConditions) {
-                            // Fallback
-                            if (dataType === 'string') {
-                              availableConditions = ['EQ', 'NEQ', 'Contains', 'NotContains'];
-                            } else if (['integer', 'number', 'int32', 'int64', 'float', 'double'].includes(dataType)) {
-                              availableConditions = ['EQ', 'NEQ', 'GT', 'LT', 'GTE', 'LTE'];
-                            } else if (dataType === 'boolean') {
-                              availableConditions = ['EQ', 'NEQ'];
-                            } else {
-                              availableConditions = ['EQ', 'NEQ'];
+                  {/* Response Attributes with Condition Selection */}
+                  <div className="bg-white rounded-xl p-6 border border-slate-200">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-4">Response Attributes and Condition Selection</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-200">
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '25%' }}>Attribute Name</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '15%' }}>Data Type</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '10%' }}>Nullable</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '50%' }}>Select Conditions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {Object.entries(responseAttributes).map(([attrName, attrData]) => {
+                            const dataType = attrData.type || 'string';
+                            // Get conditions from cache or use fallback
+                            let availableConditions = conditionsCache[dataType] || conditionsCache[dataType.toLowerCase()];
+                            if (!availableConditions) {
+                              // Fallback
+                              if (dataType === 'string') {
+                                availableConditions = ['EQ', 'NEQ', 'Contains', 'NotContains'];
+                              } else if (['integer', 'number', 'int32', 'int64', 'float', 'double'].includes(dataType)) {
+                                availableConditions = ['EQ', 'NEQ', 'GT', 'LT', 'GTE', 'LTE'];
+                              } else if (dataType === 'boolean') {
+                                availableConditions = ['EQ', 'NEQ'];
+                              } else {
+                                availableConditions = ['EQ', 'NEQ'];
+                              }
                             }
-                          }
-                          const selectedForAttr = selectedConditions[attrName] || [];
-                      
-                      return (
-                            <tr key={attrName}>
-                              <td>
-                                <strong>{attrName}</strong>
-                                {attrData.name && attrData.name !== attrName && (
-                                  <div><small className="text-muted">({attrData.name})</small></div>
-                                )}
-                              </td>
-                              <td>
-                                <Badge bg={dataType === 'string' ? 'primary' : dataType === 'integer' || dataType === 'number' ? 'success' : 'warning'}>
-                                  {dataType}
-                            </Badge>
-                                {attrData.format && (
-                                  <div><small className="text-muted">({attrData.format})</small></div>
-                                )}
-                          </td>
-                              <td>
-                                {attrData.nullable ? (
-                                  <Badge bg="info">Yes</Badge>
-                                ) : (
-                                  <Badge bg="secondary">No</Badge>
-                                )}
-                          </td>
-                          <td>
-                                {!generateAllConditions ? (
-                                  <div>
-                                    <div className="mb-2">
-                            <Button
-                              size="sm"
-                                        variant="outline-primary"
-                                        onClick={() => selectAllConditions(attrName, dataType)}
-                              className="me-2"
-                            >
-                                        Select All
-                            </Button>
-                            <Button
-                              size="sm"
-                                        variant="outline-secondary"
-                                        onClick={() => deselectAllConditions(attrName)}
-                                      >
-                                        Deselect All
-                            </Button>
+                            const selectedForAttr = selectedConditions[attrName] || [];
+                        
+                            return (
+                              <tr key={attrName} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-4 py-4">
+                                  <strong className="text-slate-900">{attrName}</strong>
+                                  {attrData.name && attrData.name !== attrName && (
+                                    <div className="text-xs text-slate-500 mt-1">({attrData.name})</div>
+                                  )}
+                                </td>
+                                <td className="px-4 py-4">
+                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                    dataType === 'string' 
+                                      ? 'bg-blue-100 text-blue-800' 
+                                      : dataType === 'integer' || dataType === 'number'
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-yellow-100 text-yellow-800'
+                                  }`}>
+                                    {dataType}
+                                  </span>
+                                  {attrData.format && (
+                                    <div className="text-xs text-slate-500 mt-1">({attrData.format})</div>
+                                  )}
+                                </td>
+                                <td className="px-4 py-4">
+                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                    attrData.nullable 
+                                      ? 'bg-cyan-100 text-cyan-800' 
+                                      : 'bg-slate-100 text-slate-600'
+                                  }`}>
+                                    {attrData.nullable ? 'Yes' : 'No'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-4">
+                                  {!generateAllConditions ? (
+                                    <div>
+                                      <div className="mb-3 flex gap-2">
+                                        <button
+                                          onClick={() => selectAllConditions(attrName, dataType)}
+                                          className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium"
+                                        >
+                                          Select All
+                                        </button>
+                                        <button
+                                          onClick={() => deselectAllConditions(attrName)}
+                                          className="px-3 py-1.5 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+                                        >
+                                          Deselect All
+                                        </button>
+                                      </div>
+                                      <div className="flex flex-wrap gap-2">
+                                        {availableConditions.map(condition => (
+                                          <label key={condition} className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                              type="checkbox"
+                                              checked={selectedForAttr.includes(condition)}
+                                              onChange={() => toggleCondition(attrName, condition)}
+                                              className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-2 focus:ring-indigo-500"
+                                            />
+                                            <span className="text-sm text-slate-700">{condition}</span>
+                                          </label>
+                                        ))}
+                                      </div>
                                     </div>
-                                    <div className="d-flex flex-wrap gap-2">
-                                      {availableConditions.map(condition => (
-                                        <Form.Check
-                                          key={condition}
-                                          type="checkbox"
-                                          label={condition}
-                                          checked={selectedForAttr.includes(condition)}
-                                          onChange={() => toggleCondition(attrName, condition)}
-                                          inline
-                                        />
-                                      ))}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div>
-                                    <Badge bg="info">
-                                      {availableConditions.length} conditions will be generated
-                                    </Badge>
-                                    <div className="mt-1">
-                                      <small className="text-muted">
+                                  ) : (
+                                    <div>
+                                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-800">
+                                        {availableConditions.length} conditions will be generated
+                                      </span>
+                                      <div className="mt-2 text-xs text-slate-500">
                                         {availableConditions.join(', ')}
-                                      </small>
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </Table>
-                  </Card.Body>
-                </Card>
-              </Card.Body>
-            </Card>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
             {/* Section 4: Generate Collection */}
-            <Card className="mb-4">
-              <Card.Header>
-                <h5 className="mb-0">Section 4: Generate Collection</h5>
-              </Card.Header>
-              <Card.Body>
-                <div className="mb-3">
-                  <Alert variant="info">
-                    <strong>Note:</strong> Generated filtering requests will be added to a folder named <strong>"{selectedRequest?.name || 'Request'} Filtering"</strong> in the original collection.
-                  </Alert>
+            <div className="card-modern mb-6">
+              <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <i className="bi bi-4-circle"></i>
+                  Section 4: Generate Collection
+                </h2>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg">
+                  <strong>Note:</strong> Generated filtering requests will be added to a folder named <strong>"{selectedRequest?.name || 'Request'} Filtering"</strong> in the original collection.
                 </div>
                 
-                <div className="mb-3">
-                  <Alert variant="info">
-                    <strong>Summary:</strong>
-                    <ul className="mb-0 mt-2">
-                      <li>Response Attributes: {Object.keys(responseAttributes).length}</li>
-                      <li>Object Type: {fieldMappings.objectType.value || 'Not set'}</li>
-                      <li>Total Requests to Generate: <strong>{calculateTotalRequests()}</strong></li>
-                      <li>Generation Mode: {generateAllConditions ? 'All Conditions' : 'Selected Conditions Only'}</li>
-                    </ul>
-                  </Alert>
+                <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg">
+                  <strong>Summary:</strong>
+                  <ul className="list-disc list-inside mt-2 space-y-1">
+                    <li>Response Attributes: {Object.keys(responseAttributes).length}</li>
+                    <li>Object Type: {fieldMappings.objectType.value || 'Not set'}</li>
+                    <li>Total Requests to Generate: <strong>{calculateTotalRequests()}</strong></li>
+                    <li>Generation Mode: {generateAllConditions ? 'All Conditions' : 'Selected Conditions Only'}</li>
+                  </ul>
                 </div>
 
-                <Button
-                  variant="success"
-                  size="lg"
+                <button
                   onClick={handleGenerateCollection}
                   disabled={generating || calculateTotalRequests() === 0 || !fieldMappings.objectType.value}
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-3 rounded-lg font-medium shadow-lg shadow-green-500/30 hover:shadow-xl hover:shadow-green-500/40 hover:from-green-700 hover:to-emerald-700 transition-all duration-200 transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
                 >
                   {generating ? (
                     <>
-                      <Spinner animation="border" size="sm" className="me-2" />
+                      <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
                       Generating Collection...
                     </>
                   ) : (
-                    'Generate and Save Collection'
+                    <>
+                      <i className="bi bi-lightning-fill"></i>
+                      Generate and Save Collection
+                    </>
                   )}
-                </Button>
-              </Card.Body>
-            </Card>
+                </button>
+              </div>
+            </div>
             </>
           )}
         </>

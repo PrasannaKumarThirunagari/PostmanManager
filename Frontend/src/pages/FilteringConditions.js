@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Button, Alert, Spinner, Table, Badge, Modal, Row, Col } from 'react-bootstrap';
 import apiService from '../services/api.service';
 
 const FilteringConditions = () => {
@@ -164,193 +163,273 @@ const FilteringConditions = () => {
     return acc;
   }, {});
 
+  const getMessageStyles = (type) => {
+    const baseStyles = "p-4 rounded-lg mb-6 border flex items-start gap-3";
+    switch (type) {
+      case 'success':
+        return `${baseStyles} bg-green-50 border-green-200 text-green-800`;
+      case 'danger':
+        return `${baseStyles} bg-red-50 border-red-200 text-red-800`;
+      case 'warning':
+        return `${baseStyles} bg-yellow-50 border-yellow-200 text-yellow-800`;
+      default:
+        return `${baseStyles} bg-blue-50 border-blue-200 text-blue-800`;
+    }
+  };
+
   return (
-    <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Filtering Conditions Master Data</h2>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
         <div>
-          <Button variant="outline-primary" onClick={handleExport} className="me-2">
-            <i className="bi bi-download me-2"></i>Export
-          </Button>
-          <label className="btn btn-outline-secondary me-2">
-            <i className="bi bi-upload me-2"></i>Import
+          <h1 className="text-4xl font-bold text-slate-900 mb-2">Filtering Conditions</h1>
+          <p className="text-slate-600">Manage filtering conditions master data</p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={handleExport}
+            className="btn-secondary-modern flex items-center gap-2"
+          >
+            <i className="bi bi-download"></i>
+            Export
+          </button>
+          <label className="btn-secondary-modern flex items-center gap-2 cursor-pointer">
+            <i className="bi bi-upload"></i>
+            Import
             <input
               type="file"
               accept=".json"
               onChange={handleImport}
-              style={{ display: 'none' }}
+              className="hidden"
             />
           </label>
-          <Button variant="primary" onClick={() => handleOpenModal()}>
-            <i className="bi bi-plus-circle me-2"></i>Add Condition
-          </Button>
+          <button
+            onClick={() => handleOpenModal()}
+            className="btn-primary-modern flex items-center gap-2"
+          >
+            <i className="bi bi-plus-circle"></i>
+            Add Condition
+          </button>
         </div>
       </div>
 
       {message.text && (
-        <Alert variant={message.type} dismissible onClose={() => setMessage({ type: '', text: '' })}>
-          {message.text}
-        </Alert>
+        <div className={getMessageStyles(message.type)}>
+          <i className={`bi ${message.type === 'success' ? 'bi-check-circle-fill' : message.type === 'danger' ? 'bi-x-circle-fill' : 'bi-exclamation-triangle-fill'} text-xl flex-shrink-0`}></i>
+          <div className="flex-1">
+            <p className="font-medium">{message.text}</p>
+          </div>
+          <button
+            onClick={() => setMessage({ type: '', text: '' })}
+            className="text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <i className="bi bi-x-lg"></i>
+          </button>
+        </div>
       )}
 
       {loading ? (
-        <div className="text-center py-5">
-          <Spinner animation="border" />
+        <div className="text-center py-12">
+          <svg className="animate-spin h-12 w-12 text-teal-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p className="text-slate-600">Loading conditions...</p>
         </div>
       ) : (
         <div>
           {Object.keys(groupedConditions).length === 0 ? (
-            <Card>
-              <Card.Body className="text-center py-5">
-                <p className="text-muted">No conditions found. Click "Add Condition" to create one.</p>
-              </Card.Body>
-            </Card>
+            <div className="card-modern text-center py-12">
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i className="bi bi-sliders text-slate-400 text-3xl"></i>
+              </div>
+              <p className="text-slate-600 font-medium">No conditions found. Click "Add Condition" to create one.</p>
+            </div>
           ) : (
             Object.keys(groupedConditions).map((dataType) => (
-              <Card key={dataType} className="mb-4">
-                <Card.Header>
-                  <h5 className="mb-0">
-                    <Badge bg="primary" className="me-2">{dataType.toUpperCase()}</Badge>
-                    {groupedConditions[dataType].length} condition(s)
-                  </h5>
-                </Card.Header>
-                <Card.Body>
-                  <Table striped bordered hover>
-                    <thead>
-                      <tr>
-                        <th>Key</th>
-                        <th>Value</th>
-                        <th>Description</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {groupedConditions[dataType].map((condition) => (
-                        <tr key={condition.id}>
-                          <td><strong>{condition.key}</strong></td>
-                          <td><code>{condition.value || '(empty)'}</code></td>
-                          <td>{condition.description || '-'}</td>
-                          <td>
-                            <Badge bg={condition.enabled ? 'success' : 'secondary'}>
-                              {condition.enabled ? 'Enabled' : 'Disabled'}
-                            </Badge>
-                          </td>
-                          <td>
-                            <Button
-                              variant="outline-primary"
-                              size="sm"
-                              onClick={() => handleOpenModal(condition)}
-                              className="me-1"
-                            >
-                              <i className="bi bi-pencil"></i>
-                            </Button>
-                            <Button
-                              variant={condition.enabled ? 'outline-warning' : 'outline-success'}
-                              size="sm"
-                              onClick={() => handleToggle(condition.id)}
-                              className="me-1"
-                            >
-                              <i className={`bi ${condition.enabled ? 'bi-toggle-off' : 'bi-toggle-on'}`}></i>
-                            </Button>
-                            <Button
-                              variant="outline-danger"
-                              size="sm"
-                              onClick={() => handleDelete(condition.id)}
-                            >
-                              <i className="bi bi-trash"></i>
-                            </Button>
-                          </td>
+              <div key={dataType} className="card-modern mb-6">
+                <div className="bg-gradient-to-r from-teal-600 to-cyan-600 px-6 py-4">
+                  <h2 className="text-xl font-bold text-white flex items-center gap-3">
+                    <span className="bg-white/20 px-3 py-1 rounded-lg text-sm font-semibold">
+                      {dataType.toUpperCase()}
+                    </span>
+                    <span className="text-white/90">{groupedConditions[dataType].length} condition(s)</span>
+                  </h2>
+                </div>
+                <div className="p-6">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-slate-200">
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Key</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Value</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Description</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
+                          <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </Table>
-                </Card.Body>
-              </Card>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {groupedConditions[dataType].map((condition) => (
+                          <tr key={condition.id} className="hover:bg-slate-50 transition-colors duration-150">
+                            <td className="px-4 py-4 font-semibold text-slate-900">{condition.key}</td>
+                            <td className="px-4 py-4">
+                              <code className="bg-slate-100 px-2 py-1 rounded text-sm text-slate-800">
+                                {condition.value || '(empty)'}
+                              </code>
+                            </td>
+                            <td className="px-4 py-4 text-slate-600">{condition.description || '-'}</td>
+                            <td className="px-4 py-4">
+                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                                condition.enabled 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {condition.enabled ? 'Enabled' : 'Disabled'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => handleOpenModal(condition)}
+                                  className="p-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+                                  title="Edit"
+                                >
+                                  <i className="bi bi-pencil"></i>
+                                </button>
+                                <button
+                                  onClick={() => handleToggle(condition.id)}
+                                  className={`p-2 rounded-lg transition-colors ${
+                                    condition.enabled
+                                      ? 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
+                                      : 'bg-green-50 text-green-700 hover:bg-green-100'
+                                  }`}
+                                  title={condition.enabled ? 'Disable' : 'Enable'}
+                                >
+                                  <i className={`bi ${condition.enabled ? 'bi-toggle-off' : 'bi-toggle-on'}`}></i>
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(condition.id)}
+                                  className="p-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors"
+                                  title="Delete"
+                                >
+                                  <i className="bi bi-trash"></i>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             ))
           )}
         </div>
       )}
 
       {/* Add/Edit Modal */}
-      <Modal show={showModal} onHide={handleCloseModal} size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>{editingCondition ? 'Edit Condition' : 'Add New Condition'}</Modal.Title>
-        </Modal.Header>
-        <Form onSubmit={handleSubmit}>
-          <Modal.Body>
-            <Row>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Data Type <span className="text-danger">*</span></Form.Label>
-                  <Form.Select
-                    value={formData.dataType}
-                    onChange={(e) => setFormData({ ...formData, dataType: e.target.value })}
-                    required
-                  >
-                    {dataTypes.map((dt) => (
-                      <option key={dt} value={dt}>{dt}</option>
-                    ))}
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Key (Condition Name) <span className="text-danger">*</span></Form.Label>
-                  <Form.Control
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={handleCloseModal}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-teal-600 to-cyan-600 px-6 py-4 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-white">{editingCondition ? 'Edit Condition' : 'Add New Condition'}</h2>
+              <button
+                onClick={handleCloseModal}
+                className="text-white hover:text-slate-200 transition-colors"
+              >
+                <i className="bi bi-x-lg text-2xl"></i>
+              </button>
+            </div>
+            <form onSubmit={handleSubmit}>
+              <div className="p-6 overflow-y-auto flex-1 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Data Type <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.dataType}
+                      onChange={(e) => setFormData({ ...formData, dataType: e.target.value })}
+                      required
+                      className="select-modern"
+                    >
+                      {dataTypes.map((dt) => (
+                        <option key={dt} value={dt}>{dt}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Key (Condition Name) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.key}
+                      onChange={(e) => setFormData({ ...formData, key: e.target.value })}
+                      placeholder="e.g., EQ, NEQ, Contains"
+                      required
+                      className="input-modern"
+                    />
+                    <p className="mt-1 text-sm text-slate-500">
+                      The condition identifier (e.g., EQ, NEQ, GT, LT, Contains)
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Value</label>
+                  <input
                     type="text"
-                    value={formData.key}
-                    onChange={(e) => setFormData({ ...formData, key: e.target.value })}
-                    placeholder="e.g., EQ, NEQ, Contains"
-                    required
+                    value={formData.value}
+                    onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+                    placeholder="e.g., *{value}* for Contains, empty for EQ/NEQ"
+                    className="input-modern"
                   />
-                  <Form.Text className="text-muted">
-                    The condition identifier (e.g., EQ, NEQ, GT, LT, Contains)
-                  </Form.Text>
-                </Form.Group>
-              </Col>
-            </Row>
-            <Form.Group className="mb-3">
-              <Form.Label>Value</Form.Label>
-              <Form.Control
-                type="text"
-                value={formData.value}
-                onChange={(e) => setFormData({ ...formData, value: e.target.value })}
-                placeholder="e.g., *{value}* for Contains, empty for EQ/NEQ"
-              />
-              <Form.Text className="text-muted">
-                Filter value pattern. Use {"{value}"} as placeholder. Leave empty for exact match conditions.
-              </Form.Text>
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Description</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={2}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Description of what this condition does"
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Check
-                type="switch"
-                label="Enabled"
-                checked={formData.enabled}
-                onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-              />
-            </Form.Group>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={handleCloseModal}>
-              Cancel
-            </Button>
-            <Button variant="primary" type="submit">
-              {editingCondition ? 'Update' : 'Create'}
-            </Button>
-          </Modal.Footer>
-        </Form>
-      </Modal>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Filter value pattern. Use {"{value}"} as placeholder. Leave empty for exact match conditions.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
+                  <textarea
+                    rows={2}
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Description of what this condition does"
+                    className="input-modern"
+                  />
+                </div>
+                <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                  <input
+                    type="checkbox"
+                    id="enabled-check"
+                    checked={formData.enabled}
+                    onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
+                    className="w-5 h-5 text-teal-600 border-slate-300 rounded focus:ring-2 focus:ring-teal-500"
+                  />
+                  <label htmlFor="enabled-check" className="text-sm font-medium text-slate-700 cursor-pointer">
+                    Enabled
+                  </label>
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="btn-secondary-modern"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary-modern"
+                >
+                  {editingCondition ? 'Update' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Container, Row, Col } from 'react-bootstrap';
 import Sidebar from './Sidebar';
 import Header from './Header';
 
@@ -7,19 +6,19 @@ const Layout = ({ children }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <Container fluid className="p-0">
-      <Row className="g-0">
-        <Col xs={12} md={3} lg={2} className="sidebar p-0">
-          <Sidebar collapsed={sidebarCollapsed} />
-        </Col>
-        <Col xs={12} md={9} lg={10} className="main-content">
-          <Header onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} />
-          <div className="p-4">
+    <div className="flex h-screen overflow-hidden">
+      <aside className={`${sidebarCollapsed ? 'w-20' : 'w-64'} transition-all duration-300 ease-in-out flex-shrink-0`}>
+        <Sidebar collapsed={sidebarCollapsed} />
+      </aside>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} />
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-6 max-w-7xl mx-auto">
             {children}
           </div>
-        </Col>
-      </Row>
-    </Container>
+        </main>
+      </div>
+    </div>
   );
 };
 
