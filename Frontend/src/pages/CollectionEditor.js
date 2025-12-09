@@ -4,8 +4,8 @@ import apiService from '../services/api.service';
 const CollectionEditor = () => {
   const [collections, setCollections] = useState([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState('');
-  const [collectionItems, setCollectionItems] = useState([]); // Filtered items for display only
-  const [fullCollection, setFullCollection] = useState(null); // Full collection structure with all injections
+  const [collectionItems, setCollectionItems] = useState([]);
+  const [fullCollection, setFullCollection] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -26,6 +26,7 @@ const CollectionEditor = () => {
       loadCollectionRequests();
     } else {
       setCollectionItems([]);
+      setFullCollection(null);
     }
   }, [selectedCollectionId]);
 
@@ -65,120 +66,83 @@ const CollectionEditor = () => {
     }
   };
 
-  const flattenItems = (items, parentPath = '', folderStructure = null, parentFolderName = '') => {
+  // Improved flattening with better unique IDs
+  const flattenItems = (items, parentPath = '', parentFolderName = '', index = 0) => {
     const requests = [];
-    items.forEach((item, index) => {
+    items.forEach((item, idx) => {
       const currentPath = parentPath ? `${parentPath} > ${item.name}` : item.name;
       
       if (item.request) {
-        // It's a request - create a unique identifier for finding it in the full collection
-        // Use: parentFolderName + requestName + method as the unique key
-        const uniqueKey = `${parentFolderName}|||${item.name}|||${item.request?.method || ''}`;
+        // It's a request - create a unique identifier
+        // Format: parentFolderName|requestName|method|index
+        const uniqueKey = `${parentFolderName}|${item.name}|${item.request?.method || ''}|${idx}`;
         requests.push({
           ...item,
-          id: uniqueKey, // Use unique key instead of path-based ID
+          id: uniqueKey,
           path: currentPath,
           parentPath: parentPath,
           parentFolderName: parentFolderName,
-          folderReference: folderStructure || item
+          originalIndex: idx
         });
       } else if (item.item && Array.isArray(item.item)) {
-        // It's a folder, recursively get requests - pass the folder name as parentFolderName
-        const folderRequests = flattenItems(item.item, currentPath, item, item.name);
+        // It's a folder, recursively get requests
+        const folderRequests = flattenItems(item.item, currentPath, item.name, idx);
         requests.push(...folderRequests);
       }
     });
     return requests;
   };
   
-  // Helper to find a request in the full collection structure by unique key
+  // Improved request finder - simpler and more reliable
   const findRequestInCollection = (items, uniqueKey) => {
-    const parts = uniqueKey.split('|||');
-    if (parts.length !== 3) {
+    if (!uniqueKey || !items) return null;
+    
+    const parts = uniqueKey.split('|');
+    if (parts.length < 3) {
       console.error('Invalid unique key format:', uniqueKey);
       return null;
     }
     
-    const [parentFolderName, requestName, method] = parts;
-    const methodUpper = (method || '').toUpperCase();
+    const [targetParentFolder, targetName, targetMethod] = parts;
+    const methodUpper = (targetMethod || '').toUpperCase();
     
-    console.log('Searching for request:', { parentFolderName, requestName, method, methodUpper });
-    
-    // If no parent folder name, search for root-level request
-    if (!parentFolderName || parentFolderName === '') {
-      for (const item of items) {
-        const itemMethod = (item.request?.method || '').toUpperCase();
-        if (item.request && item.name === requestName && itemMethod === methodUpper) {
-          console.log('Found root-level request');
-          return { item: item, parentFolder: null };
-        }
-      }
-      console.log('Root-level request not found');
-      return null;
-    }
-    
-    // First, try to find by folder name (preferred method)
-    const findFolder = (items, depth = 0) => {
-      for (const item of items) {
-        if (item.item && Array.isArray(item.item)) {
-          // Check if this is the target folder
-          if (item.name === parentFolderName) {
-            console.log(`Found target folder "${parentFolderName}" at depth ${depth}, items count: ${item.item.length}`);
-            // Found the folder - search for request inside it
-            for (const subItem of item.item) {
-              const subItemMethod = (subItem.request?.method || '').toUpperCase();
-              if (subItem.request && subItem.name === requestName && subItemMethod === methodUpper) {
-                console.log('Found request in folder');
-                return { item: subItem, parentFolder: item };
+    // Recursive search function
+    const searchRecursive = (items, parentFolder = null) => {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        
+        // Check if it's a request
+        if (item.request) {
+          const itemMethod = (item.request?.method || '').toUpperCase();
+          const itemName = item.name || '';
+          
+          // Match by name and method
+          if (itemName === targetName && itemMethod === methodUpper) {
+            // Check parent folder match
+            if (!targetParentFolder || targetParentFolder === '') {
+              // Root level request - no parent folder needed
+              if (!parentFolder) {
+                return { item: item, parentFolder: null, parentItems: items, index: i };
+              }
+            } else {
+              // Nested request - check parent folder name
+              if (parentFolder && parentFolder.name === targetParentFolder) {
+                return { item: item, parentFolder: parentFolder, parentItems: items, index: i };
               }
             }
-            console.log(`Folder "${parentFolderName}" found but request "${requestName}" (method: ${methodUpper}) not in it. Available items:`, 
-              item.item.map(i => ({ name: i.name, hasRequest: !!i.request, method: i.request?.method })));
-            // Folder found but request not in it - return null to try fallback search
-            return null;
           }
-          // Recursively search in nested folders
-          const found = findFolder(item.item, depth + 1);
-          if (found) return found;
+        }
+        
+        // If it's a folder, recurse into it
+        if (item.item && Array.isArray(item.item)) {
+          const result = searchRecursive(item.item, item);
+          if (result) return result;
         }
       }
       return null;
     };
     
-    let result = findFolder(items);
-    
-    // Fallback: If folder-based search fails, try finding by name+method anywhere
-    // This handles cases where folder structure might differ
-    if (!result) {
-      console.log('Folder-based search failed, trying fallback search by name+method');
-      const findByNameAndMethod = (items, parentFolder = null) => {
-        for (const item of items) {
-          if (item.item && Array.isArray(item.item)) {
-            // It's a folder - recurse into it
-            const found = findByNameAndMethod(item.item, item);
-            if (found) return found;
-          } else if (item.request) {
-            // It's a request - check if it matches
-            const itemMethod = (item.request?.method || '').toUpperCase();
-            if (item.name === requestName && itemMethod === methodUpper) {
-              // Check if parent folder name matches (if we have one)
-              if (parentFolder && parentFolder.name === parentFolderName) {
-                console.log('Found request via fallback search');
-                return { item: item, parentFolder: parentFolder };
-              }
-            }
-          }
-        }
-        return null;
-      };
-      
-      result = findByNameAndMethod(items);
-    }
-    
-    if (!result) {
-      console.log('Request not found in collection structure');
-    }
-    return result;
+    return searchRecursive(items);
   };
 
   const handleEdit = (request) => {
@@ -205,10 +169,13 @@ const CollectionEditor = () => {
   };
 
   const handleSaveEdit = () => {
-    if (!editingRequest || !fullCollection) return;
+    if (!editingRequest || !fullCollection) {
+      setMessage({ type: 'warning', text: 'No request selected or collection not loaded' });
+      return;
+    }
 
     try {
-      // Parse and update headers
+      // Parse and validate headers
       let headers = [];
       try {
         headers = JSON.parse(editFormData.headers);
@@ -221,14 +188,18 @@ const CollectionEditor = () => {
       }
       
       // Find the request in the full collection structure
-      const found = findRequestInCollection(fullCollection.items || [], editingRequest.id);
+      const found = findRequestInCollection(fullCollection.item || [], editingRequest.id);
       if (!found || !found.item) {
-        setMessage({ type: 'danger', text: 'Request not found in collection' });
+        setMessage({ type: 'danger', text: 'Request not found in collection. Please reload the collection.' });
         return;
       }
       
       // Update the request directly in the full collection
       const request = found.item;
+      if (!request.request) {
+        request.request = {};
+      }
+      
       request.request.header = headers;
       request.request.description = editFormData.description;
       
@@ -249,8 +220,8 @@ const CollectionEditor = () => {
         }
       }
       
-      // Update the full collection state
-      setFullCollection({ ...fullCollection });
+      // Force React to detect the change
+      setFullCollection({ ...fullCollection, item: [...fullCollection.item] });
       
       // Update the display items
       const updatedItems = collectionItems.map(item => {
@@ -271,62 +242,42 @@ const CollectionEditor = () => {
       
       setShowEditModal(false);
       setEditingRequest(null);
-      setMessage({ type: 'success', text: 'Request updated (click Save Collection to persist)' });
+      setMessage({ type: 'success', text: 'Request updated successfully (click Save Collection to persist changes)' });
     } catch (error) {
+      console.error('Error saving edit:', error);
       setMessage({ type: 'danger', text: error.message || 'Failed to update request' });
     }
   };
 
   const handleClone = (request) => {
-    if (!fullCollection) {
+    if (!fullCollection || !fullCollection.item) {
       setMessage({ type: 'danger', text: 'Collection not loaded' });
       return;
     }
     
-    if (!fullCollection.items || fullCollection.items.length === 0) {
-      setMessage({ type: 'danger', text: 'Collection items are empty' });
-      return;
-    }
-    
     try {
-      // Debug: Log the search parameters
-      console.log('Cloning request:', {
-        id: request.id,
-        name: request.name,
-        method: request.request?.method,
-        parentFolderName: request.parentFolderName,
-        fullCollectionItems: fullCollection.items?.length
-      });
-      
       // Find the request in the full collection structure
-      const found = findRequestInCollection(fullCollection.items || [], request.id);
+      const found = findRequestInCollection(fullCollection.item, request.id);
       
       if (!found || !found.item) {
-        console.error('Request not found. Search params:', {
-          uniqueKey: request.id,
-          parentFolderName: request.parentFolderName,
-          requestName: request.name,
-          method: request.request?.method,
-          fullCollectionStructure: JSON.stringify(fullCollection.items, null, 2).substring(0, 500)
-        });
         setMessage({ 
           type: 'danger', 
-          text: `Request "${request.name}" not found in collection. Please check the browser console for details.` 
+          text: `Request "${request.name}" not found in collection. Please reload the collection.` 
         });
         return;
       }
-      
-      console.log('Request found successfully:', found);
       
       // Create a deep copy of the request
       const clonedRequest = JSON.parse(JSON.stringify(found.item));
       
       // Generate unique name (handle multiple clones)
-      const baseName = request.name.replace(/ \(Copy\)( \d+)?$/, '');
-      const existingCopies = collectionItems.filter(item => 
-        item.name.startsWith(baseName + ' (Copy)') && 
-        item.parentFolderName === request.parentFolderName
-      );
+      const baseName = request.name.replace(/ \(Copy\)( \d+)?$/i, '');
+      const existingCopies = collectionItems.filter(item => {
+        const itemBaseName = item.name.replace(/ \(Copy\)( \d+)?$/i, '');
+        return itemBaseName === baseName && 
+               item.parentFolderName === request.parentFolderName &&
+               item.request?.method === request.request?.method;
+      });
       
       let newName;
       if (existingCopies.length === 0) {
@@ -337,44 +288,50 @@ const CollectionEditor = () => {
       
       clonedRequest.name = newName;
       
-      // Add the cloned request to the same folder as the original
+      // Remove any internal tracking fields
+      delete clonedRequest.id;
+      delete clonedRequest.path;
+      delete clonedRequest.parentPath;
+      delete clonedRequest.parentFolderName;
+      delete clonedRequest.originalIndex;
+      
+      // Add the cloned request to the same location as the original
       if (found.parentFolder) {
-        // Add to the parent folder's item array (right after the original)
+        // Add to the parent folder's item array
         const parentItems = found.parentFolder.item;
-        const originalIndex = parentItems.findIndex(item => 
-          item.request && item.name === request.name && item.request.method === request.request?.method
-        );
-        if (originalIndex >= 0) {
-          parentItems.splice(originalIndex + 1, 0, clonedRequest);
-        } else {
-          parentItems.push(clonedRequest);
-        }
+        const insertIndex = found.index + 1;
+        parentItems.splice(insertIndex, 0, clonedRequest);
       } else {
         // Root level - add to root items
-        fullCollection.items.push(clonedRequest);
+        const insertIndex = found.index + 1;
+        fullCollection.item.splice(insertIndex, 0, clonedRequest);
       }
       
-      // Update the full collection state
-      setFullCollection({ ...fullCollection });
+      // Force React to detect the change
+      setFullCollection({ ...fullCollection, item: [...fullCollection.item] });
       
       // Update display items
       const newDisplayItem = {
         ...clonedRequest,
-        id: `${request.parentFolderName}|||${newName}|||${clonedRequest.request?.method || ''}`,
+        id: `${request.parentFolderName}|${newName}|${clonedRequest.request?.method || ''}|${Date.now()}`,
         path: request.path,
         parentPath: request.parentPath,
         parentFolderName: request.parentFolderName
       };
       setCollectionItems([...collectionItems, newDisplayItem]);
       
-      setMessage({ type: 'success', text: `Request cloned as "${newName}" (click Save Collection to persist)` });
+      setMessage({ type: 'success', text: `Request cloned as "${newName}" (click Save Collection to persist changes)` });
     } catch (error) {
+      console.error('Error cloning request:', error);
       setMessage({ type: 'danger', text: error.message || 'Failed to clone request' });
     }
   };
 
   const handleDelete = (requestId) => {
-    if (!fullCollection) return;
+    if (!fullCollection || !fullCollection.item) {
+      setMessage({ type: 'warning', text: 'Collection not loaded' });
+      return;
+    }
     
     const requestToDelete = collectionItems.find(item => item.id === requestId);
     if (!requestToDelete) {
@@ -382,40 +339,36 @@ const CollectionEditor = () => {
       return;
     }
     
-    if (window.confirm(`Are you sure you want to delete "${requestToDelete.name}"?`)) {
-      // Find and remove the request from the full collection structure
-      const found = findRequestInCollection(fullCollection.items || [], requestId);
-      if (found && found.item) {
-        if (found.parentFolder) {
-          // Remove from parent folder's item array
-          const parentItems = found.parentFolder.item;
-          const index = parentItems.findIndex(item => 
-            item.request && item.name === requestToDelete.name && 
-            item.request.method === requestToDelete.request?.method
-          );
-          if (index >= 0) {
-            parentItems.splice(index, 1);
+    if (window.confirm(`Are you sure you want to delete "${requestToDelete.name}"?\n\nThis action cannot be undone.`)) {
+      try {
+        // Find and remove the request from the full collection structure
+        const found = findRequestInCollection(fullCollection.item, requestId);
+        
+        if (found && found.item) {
+          if (found.parentFolder) {
+            // Remove from parent folder's item array
+            found.parentItems.splice(found.index, 1);
+          } else {
+            // Remove from root items
+            fullCollection.item.splice(found.index, 1);
           }
+          
+          // Force React to detect the change
+          setFullCollection({ ...fullCollection, item: [...fullCollection.item] });
         } else {
-          // Remove from root items
-          const rootItems = fullCollection.items;
-          const index = rootItems.findIndex(item => 
-            item.request && item.name === requestToDelete.name && 
-            item.request.method === requestToDelete.request?.method
-          );
-          if (index >= 0) {
-            rootItems.splice(index, 1);
-          }
+          setMessage({ type: 'warning', text: 'Request not found in collection structure' });
+          return;
         }
         
-        // Update the full collection state
-        setFullCollection({ ...fullCollection });
+        // Update display items
+        const updatedItems = collectionItems.filter(item => item.id !== requestId);
+        setCollectionItems(updatedItems);
+        
+        setMessage({ type: 'success', text: `Request "${requestToDelete.name}" deleted (click Save Collection to persist changes)` });
+      } catch (error) {
+        console.error('Error deleting request:', error);
+        setMessage({ type: 'danger', text: error.message || 'Failed to delete request' });
       }
-      
-      // Update display items
-      const updatedItems = collectionItems.filter(item => item.id !== requestId);
-      setCollectionItems(updatedItems);
-      setMessage({ type: 'success', text: `Request "${requestToDelete.name}" deleted (click Save Collection to persist)` });
     }
   };
 
@@ -429,19 +382,44 @@ const CollectionEditor = () => {
     setMessage({ type: '', text: '' });
 
     try {
-      // Send the entire collection structure as-is (no merging needed)
+      // Clean the collection before saving (remove any internal tracking fields)
+      const cleanCollection = {
+        info: fullCollection.info,
+        item: cleanCollectionItems(fullCollection.item)
+      };
+      
       await apiService.put(`/api/collections/${selectedCollectionId}`, { 
-        collection: fullCollection 
+        collection: cleanCollection 
       });
+      
       setMessage({ type: 'success', text: 'Collection saved successfully!' });
       
       // Reload to get updated structure
       await loadCollectionRequests();
     } catch (error) {
+      console.error('Error saving collection:', error);
       setMessage({ type: 'danger', text: error.message || 'Failed to save collection' });
     } finally {
       setSaving(false);
     }
+  };
+
+  // Clean internal tracking fields from collection items
+  const cleanCollectionItems = (items) => {
+    return items.map(item => {
+      const cleaned = { ...item };
+      delete cleaned.id;
+      delete cleaned.path;
+      delete cleaned.parentPath;
+      delete cleaned.parentFolderName;
+      delete cleaned.originalIndex;
+      
+      if (cleaned.item && Array.isArray(cleaned.item)) {
+        cleaned.item = cleanCollectionItems(cleaned.item);
+      }
+      
+      return cleaned;
+    });
   };
 
   const getMessageStyles = (type) => {
@@ -462,7 +440,7 @@ const CollectionEditor = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-4xl font-bold text-slate-900 mb-2">Collection Editor</h1>
-        <p className="text-slate-600">Edit and customize Postman collection requests</p>
+        <p className="text-slate-600">Edit, clone, and delete Postman collection requests</p>
       </div>
       
       {message.text && (
@@ -515,7 +493,7 @@ const CollectionEditor = () => {
             </h2>
             <button
               onClick={handleSaveCollection}
-              disabled={saving || collectionItems.length === 0}
+              disabled={saving || !fullCollection || collectionItems.length === 0}
               className="bg-white text-orange-600 px-6 py-2 rounded-lg font-medium hover:bg-orange-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {saving ? (
@@ -636,7 +614,7 @@ const CollectionEditor = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Headers (JSON)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Headers (JSON Array)</label>
                 <textarea
                   rows={6}
                   value={editFormData.headers}
@@ -645,7 +623,7 @@ const CollectionEditor = () => {
                   className="input-modern font-mono text-sm"
                 />
                 <p className="mt-1 text-sm text-slate-500">
-                  Enter headers as JSON array
+                  Enter headers as JSON array. Example: [&#123;"key": "Content-Type", "value": "application/json"&#125;]
                 </p>
               </div>
 
@@ -655,7 +633,7 @@ const CollectionEditor = () => {
                   rows={8}
                   value={editFormData.body}
                   onChange={(e) => setEditFormData({ ...editFormData, body: e.target.value })}
-                  placeholder="Request body content"
+                  placeholder="Request body content (JSON, XML, etc.)"
                   className="input-modern font-mono text-sm"
                 />
               </div>

@@ -161,7 +161,8 @@ class PostmanCollectionBuilder:
     def add_request(self, name: str, method: str, url: str, 
                    description: str = "", headers: List[Dict] = None,
                    body: Optional[Dict] = None, params: List[Dict] = None,
-                   auth: Optional[Dict] = None, responses: List[Dict] = None):
+                   auth: Optional[Dict] = None, responses: List[Dict] = None,
+                   events: Optional[List[Dict]] = None):
         """Add a request to the collection."""
         request = {
             "name": name,
@@ -186,6 +187,9 @@ class PostmanCollectionBuilder:
         
         if auth:
             request["request"]["auth"] = auth
+        
+        if events:
+            request["event"] = events
         
         self.collection["item"].append(request)
         return self

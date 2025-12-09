@@ -1,0 +1,14 @@
+{
+  "8ae8f8b9-1737-44f2-a63d-feaf4c0bd46c": {
+    "key": "Apikey",
+    "value": "{{Apikey}}",
+    "description": "",
+    "enabled": true
+  },
+  "cb4d8d3f-271f-4ca7-ba7c-c051e141e029": {
+    "key": "Origin",
+    "value": "{{Origin}}",
+    "description": "",
+    "enabled": true
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "7e05d5e0-454f-45ea-916e-3c7832fdfb98": {
+    "status_code": "200",
+    "script_type": "test",
+    "script": "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});\n\npm.test(\"Response time is under 500 ms\", function () {\n    pm.expect(pm.response.responseTime).to.be.below(500);\n});",
+    "description": "Status 200 & Response Time",
+    "enabled": true
+  },
+  "804dca2a-ab8b-4c34-af7d-0ea92e76be43": {
+    "status_code": "400",
+    "script_type": "test",
+    "script": "pm.test(\"Should return 400 for invalid / XSS-like input\", function () {\n    pm.response.to.have.status(400);\n});\n\npm.test(\"API should reject potential XSS payload\", function () {\n    const responseBody = pm.response.text();\n    pm.expect(responseBody).to.not.include(\"<script>\");\n});",
+    "description": "",
+    "enabled": true
+  }
+}

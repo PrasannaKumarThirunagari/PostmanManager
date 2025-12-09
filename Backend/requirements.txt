@@ -28,3 +28,6 @@ python-json-logger>=3.2.0
 
 # Environment Variables
 python-dotenv>=1.0.1
+
+# Word Document Generation
+python-docx>=1.1.0

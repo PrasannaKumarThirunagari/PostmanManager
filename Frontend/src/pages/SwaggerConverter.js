@@ -39,9 +39,14 @@ const SwaggerConverter = () => {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [authorizationTypes, setAuthorizationTypes] = useState(DEFAULT_AUTH_TYPES);
   const [loadingAuthTypes, setLoadingAuthTypes] = useState(false);
+  const [globalHeaders, setGlobalHeaders] = useState([]);
+  const [includeGlobalHeaders, setIncludeGlobalHeaders] = useState(true);
+  const [selectedGlobalHeaders, setSelectedGlobalHeaders] = useState([]);
+  const [loadingGlobalHeaders, setLoadingGlobalHeaders] = useState(false);
 
   useEffect(() => {
     loadSwaggerFiles();
+    loadGlobalHeaders();
   }, []);
 
   useEffect(() => {
@@ -60,6 +65,22 @@ const SwaggerConverter = () => {
       setSwaggerFiles(response.files || []);
     } catch (error) {
       setMessage({ type: 'danger', text: error.message || 'Failed to load Swagger files' });
+    }
+  };
+
+  const loadGlobalHeaders = async () => {
+    setLoadingGlobalHeaders(true);
+    try {
+      const response = await apiService.get('/api/global-headers/');
+      setGlobalHeaders(response || []);
+      // Select all enabled headers by default
+      const enabledHeaders = (response || []).filter(h => h.enabled).map(h => h.id);
+      setSelectedGlobalHeaders(enabledHeaders);
+    } catch (error) {
+      console.error('Failed to load global headers:', error);
+      setGlobalHeaders([]);
+    } finally {
+      setLoadingGlobalHeaders(false);
     }
   };
 
@@ -172,6 +193,8 @@ const SwaggerConverter = () => {
         authorization_type: selectedAuthType,
         authorization_values: authValues[selectedAuthType],
         environments: Object.keys(environments).filter(env => environments[env]),
+        include_global_headers: includeGlobalHeaders,
+        selected_global_headers: includeGlobalHeaders ? selectedGlobalHeaders : [],
       });
 
       setMessage({ type: 'success', text: 'Conversion started successfully!' });
@@ -462,6 +485,70 @@ const SwaggerConverter = () => {
               {renderAuthInputs()}
             </div>
           )}
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-3">
+              <i className="bi bi-heading mr-2"></i>Global Headers
+            </label>
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 mb-4">
+              <div className="flex items-center gap-3 mb-4">
+                <input
+                  type="checkbox"
+                  checked={includeGlobalHeaders}
+                  onChange={(e) => {
+                    setIncludeGlobalHeaders(e.target.checked);
+                    if (e.target.checked) {
+                      // Select all enabled headers when enabling
+                      const enabledHeaders = globalHeaders.filter(h => h.enabled).map(h => h.id);
+                      setSelectedGlobalHeaders(enabledHeaders);
+                    } else {
+                      setSelectedGlobalHeaders([]);
+                    }
+                  }}
+                  className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-slate-700">Include Global Headers</span>
+              </div>
+              {includeGlobalHeaders && (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {loadingGlobalHeaders ? (
+                    <p className="text-sm text-slate-500">Loading headers...</p>
+                  ) : globalHeaders.length === 0 ? (
+                    <p className="text-sm text-slate-500">No global headers available. Add them in the Global Headers tab.</p>
+                  ) : (
+                    globalHeaders.map((header) => (
+                      <label
+                        key={header.id}
+                        className="flex items-center gap-3 p-2 bg-white border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-all duration-200"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedGlobalHeaders.includes(header.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedGlobalHeaders([...selectedGlobalHeaders, header.id]);
+                            } else {
+                              setSelectedGlobalHeaders(selectedGlobalHeaders.filter(id => id !== header.id));
+                            }
+                          }}
+                          className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
+                        />
+                        <div className="flex-1">
+                          <span className="text-sm font-medium text-slate-700">{header.key}</span>
+                          {header.description && (
+                            <p className="text-xs text-slate-500">{header.description}</p>
+                          )}
+                        </div>
+                        {!header.enabled && (
+                          <span className="text-xs text-slate-400">(Disabled)</span>
+                        )}
+                      </label>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-3">

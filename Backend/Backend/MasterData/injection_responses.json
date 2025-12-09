@@ -1,0 +1,23 @@
+{
+  "060282ec-550d-4fcf-bc5e-56aa722e132b": {
+    "id": "060282ec-550d-4fcf-bc5e-56aa722e132b",
+    "injection_type": "xss",
+    "status_code": 400,
+    "message": "XSS Attack",
+    "enabled": true
+  },
+  "1d9b3cfb-caa1-4198-8c00-a90eeca03d54": {
+    "id": "1d9b3cfb-caa1-4198-8c00-a90eeca03d54",
+    "injection_type": "sql",
+    "status_code": 400,
+    "message": "SQL Attack",
+    "enabled": true
+  },
+  "c6b13a69-2634-4b9e-841e-b1c6351cc2a7": {
+    "id": "c6b13a69-2634-4b9e-841e-b1c6351cc2a7",
+    "injection_type": "html",
+    "status_code": 400,
+    "message": "HTML  Attack",
+    "enabled": true
+  }
+}

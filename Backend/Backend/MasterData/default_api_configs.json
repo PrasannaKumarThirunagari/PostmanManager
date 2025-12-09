@@ -1,0 +1,24 @@
+{
+  "configs": [
+    {
+      "id": "caf0823a-0334-4c2b-ac43-27926288c6dd",
+      "api_name": "FlutesAPI",
+      "environment": "dev",
+      "variables": {
+        "baseUrl": "https://FlutesAPI.DEV.com/"
+      },
+      "description": "",
+      "enabled": true
+    },
+    {
+      "id": "a96f7ac1-a9da-41b2-915f-aa3109608d4e",
+      "api_name": "FlutesAPI",
+      "environment": "qa",
+      "variables": {
+        "baseUrl": "https://FlutesAPI.QA.com/"
+      },
+      "description": "",
+      "enabled": true
+    }
+  ]
+}

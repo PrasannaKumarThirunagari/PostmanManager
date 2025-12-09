@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
 from app.config import settings
-from app.api.v1 import swagger, collections, conversions, health, environments, filtering_conditions
+from app.api.v1 import swagger, collections, conversions, health, environments, filtering_conditions, global_headers, status_scripts, documentation, default_api_configs, injection_responses
 
 # Configure logging
 logging.basicConfig(
@@ -41,6 +41,11 @@ app.include_router(collections.router, prefix="/api/collections", tags=["Collect
 app.include_router(conversions.router, prefix="/api/conversions", tags=["Conversions"])
 app.include_router(environments.router, prefix="/api/environments", tags=["Environments"])
 app.include_router(filtering_conditions.router, prefix="/api/filtering-conditions", tags=["Filtering Conditions"])
+app.include_router(global_headers.router, prefix="/api/global-headers", tags=["Global Headers"])
+app.include_router(status_scripts.router, prefix="/api/status-scripts", tags=["Status Scripts"])
+app.include_router(documentation.router, prefix="/api/documentation", tags=["Documentation"])
+app.include_router(default_api_configs.router, prefix="/api/default-api-configs", tags=["Default API Configs"])
+app.include_router(injection_responses.router, tags=["Injection Responses"])
 
 
 @app.exception_handler(Exception)

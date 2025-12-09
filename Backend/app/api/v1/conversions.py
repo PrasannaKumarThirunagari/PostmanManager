@@ -300,6 +300,8 @@ class ConversionRequest(BaseModel):
     authorization_type: str = ""  # Single authorization type from dropdown
     authorization_values: dict = {}  # Authorization values based on type
     environments: List[str] = []  # List of environments to generate (local, dev, qa, uat, prod)
+    include_global_headers: bool = True  # Include global headers by default
+    selected_global_headers: List[str] = []  # List of global header IDs to include
 
 
 class ConversionResponse(BaseModel):
@@ -330,7 +332,9 @@ async def convert_swagger_to_postman(
         "include_sql": request.include_sql,
         "include_html": request.include_html,
         "authorization_type": request.authorization_type,
-        "environments": request.environments
+        "environments": request.environments,
+        "include_global_headers": request.include_global_headers,
+        "selected_global_headers": request.selected_global_headers
     }
     
     try:
@@ -426,17 +430,49 @@ async def convert_swagger_to_postman(
                 query_params = []
                 path_params = []
                 
+                # Add global headers if enabled and selected
+                if request.include_global_headers:
+                    try:
+                        from app.api.v1.global_headers import global_headers_store
+                        for header_id, header_data in global_headers_store.items():
+                            # Check if this header is in the selected list (or if no selection, include all enabled)
+                            if not request.selected_global_headers or header_id in request.selected_global_headers:
+                                if header_data.get('enabled', True):
+                                    # Check if header key already exists (from Swagger parameters)
+                                    existing_header = next(
+                                        (h for h in headers if h.get('key') == header_data.get('key')),
+                                        None
+                                    )
+                                    if not existing_header:
+                                        headers.append({
+                                            "key": header_data.get('key', ''),
+                                            "value": header_data.get('value', ''),
+                                            "type": "string",
+                                            "description": header_data.get('description', '')
+                                        })
+                    except Exception as e:
+                        # If global headers can't be loaded, continue without them
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"Could not load global headers: {e}")
+                
                 for param in operation.get('parameters', []):
                     param_name = param.get('name', '')
                     param_in = param.get('in', '')
                     param_value = param.get('schema', {}).get('default', '')
                     
                     if param_in == 'header':
-                        headers.append({
-                            "key": param_name,
-                            "value": f"{{{{{param_name}}}}}" if param_value else "",
-                            "type": "string"
-                        })
+                        # Check if this header already exists (from global headers)
+                        existing_header = next(
+                            (h for h in headers if h.get('key') == param_name),
+                            None
+                        )
+                        if not existing_header:
+                            headers.append({
+                                "key": param_name,
+                                "value": f"{{{{{param_name}}}}}" if param_value else "",
+                                "type": "string"
+                            })
                     elif param_in == 'query':
                         query_params.append({
                             "key": param_name,
@@ -622,6 +658,35 @@ async def convert_swagger_to_postman(
                 if request.authorization_type and request.authorization_values:
                     request_auth = builder.get_auth_config(request.authorization_type, request.authorization_values)
                 
+                # Get status codes from responses to determine which scripts to include
+                response_status_codes = []
+                for status_code, response_def in responses.items():
+                    if status_code.isdigit():
+                        response_status_codes.append(int(status_code))
+                    else:
+                        # Map non-numeric status codes
+                        status_map = {
+                            'default': 200,
+                            '2XX': 200,
+                            '3XX': 300,
+                            '4XX': 400,
+                            '5XX': 500
+                        }
+                        response_status_codes.append(status_map.get(status_code, 200))
+                
+                # Get scripts for all response status codes (merged, no duplicates)
+                from app.api.v1.status_scripts import get_scripts_for_status_codes, status_scripts_store
+                from app.api.v1.injection_responses import get_response_for_injection_type
+                scripts_dict = get_scripts_for_status_codes(response_status_codes) if response_status_codes else {'prerequest': [], 'test': []}
+                
+                # Debug: Log if scripts are found (can be removed in production)
+                import logging
+                logger = logging.getLogger(__name__)
+                if scripts_dict['prerequest'] or scripts_dict['test']:
+                    logger.info(f"Found scripts for status codes {response_status_codes}: prerequest={len(scripts_dict['prerequest'])} lines, test={len(scripts_dict['test'])} lines")
+                elif response_status_codes:
+                    logger.debug(f"No scripts found for status codes {response_status_codes}. Total scripts in store: {len(status_scripts_store)}")
+                
                 # Generate security test variants if requested
                 if request.include_xss or request.include_sql or request.include_html:
                     # Create folder for this request
@@ -646,6 +711,27 @@ async def convert_swagger_to_postman(
                         original_request["request"]["body"] = body
                     if request_auth:
                         original_request["request"]["auth"] = request_auth
+                    
+                    # Add scripts to original request
+                    if scripts_dict['prerequest'] or scripts_dict['test']:
+                        original_request["event"] = []
+                        if scripts_dict['prerequest']:
+                            original_request["event"].append({
+                                "listen": "prerequest",
+                                "script": {
+                                    "type": "text/javascript",
+                                    "exec": scripts_dict['prerequest']
+                                }
+                            })
+                        if scripts_dict['test']:
+                            original_request["event"].append({
+                                "listen": "test",
+                                "script": {
+                                    "type": "text/javascript",
+                                    "exec": scripts_dict['test']
+                                }
+                            })
+                    
                     folder_items.append(original_request)
                     
                     # Generate XSS variants - one request per field
@@ -674,6 +760,46 @@ async def convert_swagger_to_postman(
                                         
                                         # Serialize datetime objects
                                         variant_body_data = json_serialize(variant_body_data)
+                                        # Get injection response configuration for XSS
+                                        injection_response = get_response_for_injection_type('xss')
+                                        
+                                        # Create response array with injection response if configured
+                                        variant_responses = list(postman_responses) if postman_responses else []
+                                        if injection_response:
+                                            # Add 400 response for injection
+                                            injection_400_response = {
+                                                "name": f"{injection_response['status_code']} {injection_response['message']}",
+                                                "originalRequest": {
+                                                    "method": method.upper(),
+                                                    "header": headers,
+                                                    "url": {
+                                                        "raw": full_url,
+                                                        "host": builder._parse_host(full_url),
+                                                        "path": builder._parse_path(full_url),
+                                                        "query": query_params
+                                                    },
+                                                    "body": {
+                                                        "mode": "raw",
+                                                        "raw": json.dumps(variant_body_data, indent=2, cls=DateTimeEncoder),
+                                                        "options": {"raw": {"language": "json"}}
+                                                    }
+                                                },
+                                                "status": str(injection_response['status_code']),
+                                                "code": injection_response['status_code'],
+                                                "header": [
+                                                    {
+                                                        "key": "Content-Type",
+                                                        "value": "application/json",
+                                                        "type": "text"
+                                                    }
+                                                ],
+                                                "body": json.dumps({
+                                                    "error": injection_response['message'],
+                                                    "statusCode": injection_response['status_code']
+                                                }, indent=2)
+                                            }
+                                            variant_responses.append(injection_400_response)
+                                        
                                         variant_request = {
                                             "name": f"{request_name} XSS-Injection {field_name}",
                                             "request": {
@@ -691,10 +817,47 @@ async def convert_swagger_to_postman(
                                                     "options": {"raw": {"language": "json"}}
                                                 }
                                             },
-                                            "response": postman_responses
+                                            "response": variant_responses
                                         }
                                         if request_auth:
                                             variant_request["request"]["auth"] = request_auth
+                                        
+                                        # Add scripts to variant request - use 400 status code for injection requests
+                                        injection_scripts_dict = get_scripts_for_status_codes([400])
+                                        
+                                        # Add test script to validate injection response message if configured
+                                        test_scripts = list(injection_scripts_dict.get('test', []))
+                                        if injection_response and injection_response.get('message'):
+                                            # Escape message for JavaScript string (handle quotes and special characters)
+                                            escaped_message = injection_response['message'].replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
+                                            # Add test to validate the injection response message
+                                            message_validation_script = [
+                                                f"pm.test(\"Response should contain injection error message: {escaped_message}\", function () {{",
+                                                "    const responseBody = pm.response.json();",
+                                                f"    pm.expect(responseBody.error || responseBody.message || JSON.stringify(responseBody)).to.include(\"{escaped_message}\");",
+                                                "});"
+                                            ]
+                                            test_scripts.extend(message_validation_script)
+                                        
+                                        if injection_scripts_dict['prerequest'] or test_scripts:
+                                            variant_request["event"] = []
+                                            if injection_scripts_dict['prerequest']:
+                                                variant_request["event"].append({
+                                                    "listen": "prerequest",
+                                                    "script": {
+                                                        "type": "text/javascript",
+                                                        "exec": injection_scripts_dict['prerequest']
+                                                    }
+                                                })
+                                            if test_scripts:
+                                                variant_request["event"].append({
+                                                    "listen": "test",
+                                                    "script": {
+                                                        "type": "text/javascript",
+                                                        "exec": test_scripts
+                                                    }
+                                                })
+                                        
                                         xss_folder["item"].append(variant_request)
                             except (json.JSONDecodeError, TypeError):
                                 pass
@@ -726,6 +889,46 @@ async def convert_swagger_to_postman(
                                         
                                         # Serialize datetime objects
                                         variant_body_data = json_serialize(variant_body_data)
+                                        # Get injection response configuration for SQL
+                                        injection_response = get_response_for_injection_type('sql')
+                                        
+                                        # Create response array with injection response if configured
+                                        variant_responses = list(postman_responses) if postman_responses else []
+                                        if injection_response:
+                                            # Add 400 response for injection
+                                            injection_400_response = {
+                                                "name": f"{injection_response['status_code']} {injection_response['message']}",
+                                                "originalRequest": {
+                                                    "method": method.upper(),
+                                                    "header": headers,
+                                                    "url": {
+                                                        "raw": full_url,
+                                                        "host": builder._parse_host(full_url),
+                                                        "path": builder._parse_path(full_url),
+                                                        "query": query_params
+                                                    },
+                                                    "body": {
+                                                        "mode": "raw",
+                                                        "raw": json.dumps(variant_body_data, indent=2, cls=DateTimeEncoder),
+                                                        "options": {"raw": {"language": "json"}}
+                                                    }
+                                                },
+                                                "status": str(injection_response['status_code']),
+                                                "code": injection_response['status_code'],
+                                                "header": [
+                                                    {
+                                                        "key": "Content-Type",
+                                                        "value": "application/json",
+                                                        "type": "text"
+                                                    }
+                                                ],
+                                                "body": json.dumps({
+                                                    "error": injection_response['message'],
+                                                    "statusCode": injection_response['status_code']
+                                                }, indent=2)
+                                            }
+                                            variant_responses.append(injection_400_response)
+                                        
                                         variant_request = {
                                             "name": f"{request_name} SQL-Injection {field_name}",
                                             "request": {
@@ -743,10 +946,47 @@ async def convert_swagger_to_postman(
                                                     "options": {"raw": {"language": "json"}}
                                                 }
                                             },
-                                            "response": postman_responses
+                                            "response": variant_responses
                                         }
                                         if request_auth:
                                             variant_request["request"]["auth"] = request_auth
+                                        
+                                        # Add scripts to variant request - use 400 status code for injection requests
+                                        injection_scripts_dict = get_scripts_for_status_codes([400])
+                                        
+                                        # Add test script to validate injection response message if configured
+                                        test_scripts = list(injection_scripts_dict.get('test', []))
+                                        if injection_response and injection_response.get('message'):
+                                            # Escape message for JavaScript string (handle quotes and special characters)
+                                            escaped_message = injection_response['message'].replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
+                                            # Add test to validate the injection response message
+                                            message_validation_script = [
+                                                f"pm.test(\"Response should contain injection error message: {escaped_message}\", function () {{",
+                                                "    const responseBody = pm.response.json();",
+                                                f"    pm.expect(responseBody.error || responseBody.message || JSON.stringify(responseBody)).to.include(\"{escaped_message}\");",
+                                                "});"
+                                            ]
+                                            test_scripts.extend(message_validation_script)
+                                        
+                                        if injection_scripts_dict['prerequest'] or test_scripts:
+                                            variant_request["event"] = []
+                                            if injection_scripts_dict['prerequest']:
+                                                variant_request["event"].append({
+                                                    "listen": "prerequest",
+                                                    "script": {
+                                                        "type": "text/javascript",
+                                                        "exec": injection_scripts_dict['prerequest']
+                                                    }
+                                                })
+                                            if test_scripts:
+                                                variant_request["event"].append({
+                                                    "listen": "test",
+                                                    "script": {
+                                                        "type": "text/javascript",
+                                                        "exec": test_scripts
+                                                    }
+                                                })
+                                        
                                         sql_folder["item"].append(variant_request)
                             except (json.JSONDecodeError, TypeError):
                                 pass
@@ -778,6 +1018,46 @@ async def convert_swagger_to_postman(
                                         
                                         # Serialize datetime objects
                                         variant_body_data = json_serialize(variant_body_data)
+                                        # Get injection response configuration for HTML
+                                        injection_response = get_response_for_injection_type('html')
+                                        
+                                        # Create response array with injection response if configured
+                                        variant_responses = list(postman_responses) if postman_responses else []
+                                        if injection_response:
+                                            # Add 400 response for injection
+                                            injection_400_response = {
+                                                "name": f"{injection_response['status_code']} {injection_response['message']}",
+                                                "originalRequest": {
+                                                    "method": method.upper(),
+                                                    "header": headers,
+                                                    "url": {
+                                                        "raw": full_url,
+                                                        "host": builder._parse_host(full_url),
+                                                        "path": builder._parse_path(full_url),
+                                                        "query": query_params
+                                                    },
+                                                    "body": {
+                                                        "mode": "raw",
+                                                        "raw": json.dumps(variant_body_data, indent=2, cls=DateTimeEncoder),
+                                                        "options": {"raw": {"language": "json"}}
+                                                    }
+                                                },
+                                                "status": str(injection_response['status_code']),
+                                                "code": injection_response['status_code'],
+                                                "header": [
+                                                    {
+                                                        "key": "Content-Type",
+                                                        "value": "application/json",
+                                                        "type": "text"
+                                                    }
+                                                ],
+                                                "body": json.dumps({
+                                                    "error": injection_response['message'],
+                                                    "statusCode": injection_response['status_code']
+                                                }, indent=2)
+                                            }
+                                            variant_responses.append(injection_400_response)
+                                        
                                         variant_request = {
                                             "name": f"{request_name} HTML-Injection {field_name}",
                                             "request": {
@@ -795,10 +1075,47 @@ async def convert_swagger_to_postman(
                                                     "options": {"raw": {"language": "json"}}
                                                 }
                                             },
-                                            "response": postman_responses
+                                            "response": variant_responses
                                         }
                                         if request_auth:
                                             variant_request["request"]["auth"] = request_auth
+                                        
+                                        # Add scripts to variant request - use 400 status code for injection requests
+                                        injection_scripts_dict = get_scripts_for_status_codes([400])
+                                        
+                                        # Add test script to validate injection response message if configured
+                                        test_scripts = list(injection_scripts_dict.get('test', []))
+                                        if injection_response and injection_response.get('message'):
+                                            # Escape message for JavaScript string (handle quotes and special characters)
+                                            escaped_message = injection_response['message'].replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
+                                            # Add test to validate the injection response message
+                                            message_validation_script = [
+                                                f"pm.test(\"Response should contain injection error message: {escaped_message}\", function () {{",
+                                                "    const responseBody = pm.response.json();",
+                                                f"    pm.expect(responseBody.error || responseBody.message || JSON.stringify(responseBody)).to.include(\"{escaped_message}\");",
+                                                "});"
+                                            ]
+                                            test_scripts.extend(message_validation_script)
+                                        
+                                        if injection_scripts_dict['prerequest'] or test_scripts:
+                                            variant_request["event"] = []
+                                            if injection_scripts_dict['prerequest']:
+                                                variant_request["event"].append({
+                                                    "listen": "prerequest",
+                                                    "script": {
+                                                        "type": "text/javascript",
+                                                        "exec": injection_scripts_dict['prerequest']
+                                                    }
+                                                })
+                                            if test_scripts:
+                                                variant_request["event"].append({
+                                                    "listen": "test",
+                                                    "script": {
+                                                        "type": "text/javascript",
+                                                        "exec": test_scripts
+                                                    }
+                                                })
+                                        
                                         html_folder["item"].append(variant_request)
                             except (json.JSONDecodeError, TypeError):
                                 pass
@@ -807,6 +1124,25 @@ async def convert_swagger_to_postman(
                     # Add folder with all variants
                     builder.add_folder(request_name, folder_items)
                 else:
+                    # Build events array for scripts
+                    events = []
+                    if scripts_dict['prerequest']:
+                        events.append({
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": scripts_dict['prerequest']
+                            }
+                        })
+                    if scripts_dict['test']:
+                        events.append({
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": scripts_dict['test']
+                            }
+                        })
+                    
                     # Add original request without variants
                     builder.add_request(
                         name=request_name,
@@ -817,7 +1153,8 @@ async def convert_swagger_to_postman(
                         body=body,
                         params=query_params,
                         auth=request_auth,
-                        responses=postman_responses
+                        responses=postman_responses,
+                        events=events if events else None
                     )
         
         # Build collection
@@ -878,9 +1215,11 @@ async def convert_swagger_to_postman(
         all_variables = VariableExtractorService.extract_variables(collection)
         
         # Generate environment files for selected environments
+        # Pass both sanitized_name (for folder/file names) and api_name (for config matching)
         if request.environments:
             await generate_environment_files(
-                sanitized_name, 
+                sanitized_name,  # Used for folder/file names
+                api_name,  # Original API name for config matching
                 swagger_data, 
                 base_url, 
                 request.authorization_values,
@@ -939,7 +1278,8 @@ async def convert_swagger_to_postman(
 
 
 async def generate_environment_files(
-    api_name: str,
+    sanitized_api_name: str,  # For folder/file names
+    original_api_name: str,  # Original API name for config matching
     swagger_data: Dict[str, Any],
     base_url: str,
     auth_values: Dict[str, Any],
@@ -948,7 +1288,7 @@ async def generate_environment_files(
 ):
     """Generate environment files for selected environments."""
     environments_dir = Path(settings.environments_dir)
-    env_dir = environments_dir / api_name
+    env_dir = environments_dir / sanitized_api_name  # Use sanitized name for folder
     env_dir.mkdir(parents=True, exist_ok=True)
     
     # Extract base URL from servers
@@ -978,24 +1318,37 @@ async def generate_environment_files(
         env_url = env_url_map.get(env_name, original_base_url)
         env_display_name = env_display_map.get(env_name, env_name.capitalize())
         
+        # Load default values from MasterData if available
+        from app.api.v1.default_api_configs import get_default_values_for_variables
+        
+        # Get all default values for this API and environment
+        # Use original_api_name for matching (handles both sanitized and original names)
+        all_var_names = ['baseUrl'] + list(all_variables)
+        default_values = get_default_values_for_variables(original_api_name, env_name, all_var_names)
+        
+        # Check if baseUrl is in default configs
+        default_base_url = default_values.get('baseUrl')
+        final_base_url = default_base_url if default_base_url else env_url
+        
         # Start with baseUrl
         env_values = [
             {
                 "key": "baseUrl",
-                "value": env_url,
+                "value": final_base_url,
                 "type": "default",
                 "enabled": True
             }
         ]
         
-        # Add auth values
+        # Add auth values (use defaults if available)
         if auth_values:
             for key, value in auth_values.items():
-                # Use variable name for auth values
+                # Use default value if available, otherwise use provided value
                 var_key = key
+                var_value = default_values.get(var_key, str(value))
                 env_values.append({
                     "key": var_key,
-                    "value": str(value),
+                    "value": var_value,
                     "type": "secret" if key in ['password', 'token'] else "default",
                     "enabled": True
                 })
@@ -1009,8 +1362,12 @@ async def generate_environment_files(
             if var_name in [k for k in auth_values.keys()]:
                 continue
             
-            # Generate default value based on variable name
-            default_value = generate_default_value_for_variable(var_name)
+            # Use default value from config if available, otherwise generate one
+            if var_name in default_values:
+                default_value = default_values[var_name]
+            else:
+                default_value = generate_default_value_for_variable(var_name)
+            
             env_values.append({
                 "key": var_name,
                 "value": default_value,
@@ -1020,8 +1377,8 @@ async def generate_environment_files(
         
         # Postman Environment v1.0 format
         env_file = {
-            "id": f"{api_name}-{env_display_name}",
-            "name": f"{api_name} - {env_display_name}",
+            "id": f"{sanitized_api_name}-{env_display_name}",
+            "name": f"{original_api_name} - {env_display_name}",
             "values": env_values,
             "_postman_variable_scope": "environment",
             "_postman_exported_at": datetime.now().isoformat(),
@@ -1029,7 +1386,7 @@ async def generate_environment_files(
         }
         
         # File naming: APINAME-{Environment}.postman_environment.json
-        env_file_path = env_dir / f"{api_name}-{env_display_name}.postman_environment.json"
+        env_file_path = env_dir / f"{sanitized_api_name}-{env_display_name}.postman_environment.json"
         # Serialize datetime objects before saving
         env_file = json_serialize(env_file)
         with open(env_file_path, 'w', encoding='utf-8') as f:
