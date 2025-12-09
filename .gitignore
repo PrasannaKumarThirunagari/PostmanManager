@@ -4,3 +4,4 @@ Backend/Environments/
 Backend/Environments/**
 Backend/SwaggerFiles/
 Backend/SwaggerFiles/**
+/Backend/Environments
