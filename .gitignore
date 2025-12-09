@@ -1,6 +1,6 @@
-PostmanCollection/
-PostmanCollection/**
-Environments/
-Environments/**
-SwaggerFiles/
-SwaggerFiles/**
+Backend/PostmanCollection/
+Backend/PostmanCollection/**
+Backend/Environments/
+Backend/Environments/**
+Backend/SwaggerFiles/
+Backend/SwaggerFiles/**
