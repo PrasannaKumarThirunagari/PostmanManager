@@ -1,0 +1,282 @@
+openapi: 3.0.3
+info:
+  title: Example API With All Request Types
+  version: 1.0.0
+
+servers:
+  - url: https://api.example.com/v1
+
+paths:
+  /users:
+    get:
+      summary: Get list of users
+      tags: [Users]
+      parameters:
+        - in: query
+          name: role
+          schema:
+            type: string
+          description: Filter by role
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserList"
+
+    post:
+      summary: Create a new user
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreateRequest"
+      responses:
+        "201":
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{userId}:
+    get:
+      summary: Get user by ID
+      tags: [Users]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Detailed user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+    put:
+      summary: Replace entire user object
+      tags: [Users]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdateRequest"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+    patch:
+      summary: Update partial user fields
+      tags: [Users]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserPatchRequest"
+      responses:
+        "200":
+          description: Partially updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+    delete:
+      summary: Delete a user
+      tags: [Users]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted successfully
+
+  /auth/login:
+    post:
+      summary: User login
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+
+components:
+  schemas:
+
+    #########################
+    #       USER MODELS     #
+    #########################
+
+    User:
+      type: object
+      required: [id, name, email]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        profile:
+          $ref: "#/components/schemas/UserProfile"
+        address:
+          $ref: "#/components/schemas/Address"
+
+    UserList:
+      type: array
+      items:
+        $ref: "#/components/schemas/User"
+
+    UserCreateRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        profile:
+          $ref: "#/components/schemas/UserProfile"
+        address:
+          $ref: "#/components/schemas/Address"
+
+    UserUpdateRequest:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        profile:
+          $ref: "#/components/schemas/UserProfile"
+        address:
+          $ref: "#/components/schemas/Address"
+
+    UserPatchRequest:
+      type: object
+      description: Only fields that need partial update
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        profile:
+          $ref: "#/components/schemas/UserProfile"
+        address:
+          $ref: "#/components/schemas/Address"
+
+    #########################
+    #   NESTED OBJECTS      #
+    #########################
+
+    UserProfile:
+      type: object
+      properties:
+        age:
+          type: integer
+        bio:
+          type: string
+        social:
+          type: object
+          properties:
+            facebook:
+              type: string
+            instagram:
+              type: string
+            twitter:
+              type: string
+
+    Address:
+      type: object
+      properties:
+        line1:
+          type: string
+        line2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        postalCode:
+          type: string
+        geo:
+          type: object
+          properties:
+            lat:
+              type: number
+            lng:
+              type: number
+
+    #########################
+    #       AUTH MODELS     #
+    #########################
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        expiresIn:
+          type: integer
+        user:
+          $ref: "#/components/schemas/User"

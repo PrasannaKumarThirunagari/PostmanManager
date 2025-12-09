@@ -1,0 +1,149 @@
+{
+  "conditions": [
+    {
+      "id": "string_eq",
+      "dataType": "string",
+      "key": "EQ",
+      "value": "",
+      "enabled": true,
+      "description": "Equals - Exact match"
+    },
+    {
+      "id": "string_neq",
+      "dataType": "string",
+      "key": "NEQ",
+      "value": "",
+      "enabled": true,
+      "description": "Not Equals - Not exact match"
+    },
+    {
+      "id": "string_contains",
+      "dataType": "string",
+      "key": "Contains",
+      "value": "*{value}*",
+      "enabled": true,
+      "description": "Contains - String contains the value"
+    },
+    {
+      "id": "string_not_contains",
+      "dataType": "string",
+      "key": "NotContains",
+      "value": "*{value}*",
+      "enabled": true,
+      "description": "Not Contains - String does not contain the value"
+    },
+    {
+      "id": "number_eq",
+      "dataType": "number",
+      "key": "EQ",
+      "value": "",
+      "enabled": true,
+      "description": "Equals - Exact match"
+    },
+    {
+      "id": "number_neq",
+      "dataType": "number",
+      "key": "NEQ",
+      "value": "",
+      "enabled": true,
+      "description": "Not Equals - Not exact match"
+    },
+    {
+      "id": "number_gt",
+      "dataType": "number",
+      "key": "GT",
+      "value": "",
+      "enabled": true,
+      "description": "Greater Than"
+    },
+    {
+      "id": "number_lt",
+      "dataType": "number",
+      "key": "LT",
+      "value": "",
+      "enabled": true,
+      "description": "Less Than"
+    },
+    {
+      "id": "number_gte",
+      "dataType": "number",
+      "key": "GTE",
+      "value": "",
+      "enabled": true,
+      "description": "Greater Than or Equal"
+    },
+    {
+      "id": "number_lte",
+      "dataType": "number",
+      "key": "LTE",
+      "value": "",
+      "enabled": true,
+      "description": "Less Than or Equal"
+    },
+    {
+      "id": "boolean_eq",
+      "dataType": "boolean",
+      "key": "EQ",
+      "value": "",
+      "enabled": true,
+      "description": "Equals - Exact match"
+    },
+    {
+      "id": "boolean_neq",
+      "dataType": "boolean",
+      "key": "NEQ",
+      "value": "",
+      "enabled": true,
+      "description": "Not Equals - Not exact match"
+    },
+    {
+      "id": "integer_eq",
+      "dataType": "integer",
+      "key": "EQ",
+      "value": "",
+      "enabled": true,
+      "description": "Equals - Exact match"
+    },
+    {
+      "id": "integer_neq",
+      "dataType": "integer",
+      "key": "NEQ",
+      "value": "",
+      "enabled": true,
+      "description": "Not Equals - Not exact match"
+    },
+    {
+      "id": "integer_gt",
+      "dataType": "integer",
+      "key": "GT",
+      "value": "",
+      "enabled": true,
+      "description": "Greater Than"
+    },
+    {
+      "id": "integer_lt",
+      "dataType": "integer",
+      "key": "LT",
+      "value": "",
+      "enabled": true,
+      "description": "Less Than"
+    },
+    {
+      "id": "integer_gte",
+      "dataType": "integer",
+      "key": "GTE",
+      "value": "",
+      "enabled": true,
+      "description": "Greater Than or Equal"
+    },
+    {
+      "id": "integer_lte",
+      "dataType": "integer",
+      "key": "LTE",
+      "value": "",
+      "enabled": true,
+      "description": "Less Than or Equal"
+    }
+  ]
+}
+

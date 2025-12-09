@@ -1,0 +1,1064 @@
+{
+  "info": {
+    "name": "FlutesAPI",
+    "description": "",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "swagger-to-postman-converter",
+    "version": "1.0",
+    "_postman_id": "e79da80c-65e3-4978-a22d-cd61edd08d99"
+  },
+  "item": [
+    {
+      "name": "post_WeatherForecast",
+      "item": [
+        {
+          "name": "post_WeatherForecast",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/WeatherForecast",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "WeatherForecast"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attributeName\": \"{{attributeName}}\",\n  \"objectType\": \"{{objectType}}\",\n  \"dataType\": \"{{dataType}}\",\n  \"condition\": \"{{condition}}\",\n  \"attributeValue\": \"{{attributeValue}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{AUTH}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"{{attributeName}}\",\n  \"objectType\": \"{{objectType}}\",\n  \"dataType\": \"{{dataType}}\",\n  \"condition\": \"{{condition}}\",\n  \"attributeValue\": \"{{attributeValue}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "200",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"portfolioId\": {\n    \"name\": \"portfolioId\",\n    \"type\": \"integer\",\n    \"nullable\": false,\n    \"required\": false,\n    \"format\": \"int32\"\n  },\n  \"portfolioName\": {\n    \"name\": \"portfolioName\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioCity\": {\n    \"name\": \"portfolioCity\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioState\": {\n    \"name\": \"portfolioState\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioCountry\": {\n    \"name\": \"portfolioCountry\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"effectiveDate\": {\n    \"name\": \"effectiveDate\",\n    \"type\": \"string\",\n    \"nullable\": false,\n    \"required\": false,\n    \"format\": \"date-time\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "SQL-Injections",
+          "item": [
+            {
+              "name": "post_WeatherForecast SQL-Injection attributeName",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"' OR '1'='1\",\n  \"objectType\": \"{{objectType}}\",\n  \"dataType\": \"{{dataType}}\",\n  \"condition\": \"{{condition}}\",\n  \"attributeValue\": \"{{attributeValue}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "200 OK",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/WeatherForecast",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "WeatherForecast"
+                      ],
+                      "query": []
+                    },
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"attributeName\": \"{{attributeName}}\",\n  \"objectType\": \"{{objectType}}\",\n  \"dataType\": \"{{dataType}}\",\n  \"condition\": \"{{condition}}\",\n  \"attributeValue\": \"{{attributeValue}}\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "status": "200",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json",
+                      "type": "text"
+                    }
+                  ],
+                  "body": "{\n  \"portfolioId\": {\n    \"name\": \"portfolioId\",\n    \"type\": \"integer\",\n    \"nullable\": false,\n    \"required\": false,\n    \"format\": \"int32\"\n  },\n  \"portfolioName\": {\n    \"name\": \"portfolioName\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioCity\": {\n    \"name\": \"portfolioCity\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioState\": {\n    \"name\": \"portfolioState\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioCountry\": {\n    \"name\": \"portfolioCountry\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"effectiveDate\": {\n    \"name\": \"effectiveDate\",\n    \"type\": \"string\",\n    \"nullable\": false,\n    \"required\": false,\n    \"format\": \"date-time\"\n  }\n}"
+                }
+              ]
+            },
+            {
+              "name": "post_WeatherForecast SQL-Injection objectType",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"{{attributeName}}\",\n  \"objectType\": \"' OR '1'='1\",\n  \"dataType\": \"{{dataType}}\",\n  \"condition\": \"{{condition}}\",\n  \"attributeValue\": \"{{attributeValue}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "200 OK",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/WeatherForecast",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "WeatherForecast"
+                      ],
+                      "query": []
+                    },
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"attributeName\": \"{{attributeName}}\",\n  \"objectType\": \"{{objectType}}\",\n  \"dataType\": \"{{dataType}}\",\n  \"condition\": \"{{condition}}\",\n  \"attributeValue\": \"{{attributeValue}}\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "status": "200",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json",
+                      "type": "text"
+                    }
+                  ],
+                  "body": "{\n  \"portfolioId\": {\n    \"name\": \"portfolioId\",\n    \"type\": \"integer\",\n    \"nullable\": false,\n    \"required\": false,\n    \"format\": \"int32\"\n  },\n  \"portfolioName\": {\n    \"name\": \"portfolioName\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioCity\": {\n    \"name\": \"portfolioCity\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioState\": {\n    \"name\": \"portfolioState\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioCountry\": {\n    \"name\": \"portfolioCountry\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"effectiveDate\": {\n    \"name\": \"effectiveDate\",\n    \"type\": \"string\",\n    \"nullable\": false,\n    \"required\": false,\n    \"format\": \"date-time\"\n  }\n}"
+                }
+              ]
+            },
+            {
+              "name": "post_WeatherForecast SQL-Injection dataType",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"{{attributeName}}\",\n  \"objectType\": \"{{objectType}}\",\n  \"dataType\": \"' OR '1'='1\",\n  \"condition\": \"{{condition}}\",\n  \"attributeValue\": \"{{attributeValue}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "200 OK",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/WeatherForecast",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "WeatherForecast"
+                      ],
+                      "query": []
+                    },
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"attributeName\": \"{{attributeName}}\",\n  \"objectType\": \"{{objectType}}\",\n  \"dataType\": \"{{dataType}}\",\n  \"condition\": \"{{condition}}\",\n  \"attributeValue\": \"{{attributeValue}}\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "status": "200",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json",
+                      "type": "text"
+                    }
+                  ],
+                  "body": "{\n  \"portfolioId\": {\n    \"name\": \"portfolioId\",\n    \"type\": \"integer\",\n    \"nullable\": false,\n    \"required\": false,\n    \"format\": \"int32\"\n  },\n  \"portfolioName\": {\n    \"name\": \"portfolioName\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioCity\": {\n    \"name\": \"portfolioCity\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioState\": {\n    \"name\": \"portfolioState\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioCountry\": {\n    \"name\": \"portfolioCountry\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"effectiveDate\": {\n    \"name\": \"effectiveDate\",\n    \"type\": \"string\",\n    \"nullable\": false,\n    \"required\": false,\n    \"format\": \"date-time\"\n  }\n}"
+                }
+              ]
+            },
+            {
+              "name": "post_WeatherForecast SQL-Injection condition",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"{{attributeName}}\",\n  \"objectType\": \"{{objectType}}\",\n  \"dataType\": \"{{dataType}}\",\n  \"condition\": \"' OR '1'='1\",\n  \"attributeValue\": \"{{attributeValue}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "200 OK",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/WeatherForecast",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "WeatherForecast"
+                      ],
+                      "query": []
+                    },
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"attributeName\": \"{{attributeName}}\",\n  \"objectType\": \"{{objectType}}\",\n  \"dataType\": \"{{dataType}}\",\n  \"condition\": \"{{condition}}\",\n  \"attributeValue\": \"{{attributeValue}}\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "status": "200",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json",
+                      "type": "text"
+                    }
+                  ],
+                  "body": "{\n  \"portfolioId\": {\n    \"name\": \"portfolioId\",\n    \"type\": \"integer\",\n    \"nullable\": false,\n    \"required\": false,\n    \"format\": \"int32\"\n  },\n  \"portfolioName\": {\n    \"name\": \"portfolioName\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioCity\": {\n    \"name\": \"portfolioCity\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioState\": {\n    \"name\": \"portfolioState\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioCountry\": {\n    \"name\": \"portfolioCountry\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"effectiveDate\": {\n    \"name\": \"effectiveDate\",\n    \"type\": \"string\",\n    \"nullable\": false,\n    \"required\": false,\n    \"format\": \"date-time\"\n  }\n}"
+                }
+              ]
+            },
+            {
+              "name": "post_WeatherForecast SQL-Injection attributeValue",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"{{attributeName}}\",\n  \"objectType\": \"{{objectType}}\",\n  \"dataType\": \"{{dataType}}\",\n  \"condition\": \"{{condition}}\",\n  \"attributeValue\": \"' OR '1'='1\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "200 OK",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/WeatherForecast",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "WeatherForecast"
+                      ],
+                      "query": []
+                    },
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"attributeName\": \"{{attributeName}}\",\n  \"objectType\": \"{{objectType}}\",\n  \"dataType\": \"{{dataType}}\",\n  \"condition\": \"{{condition}}\",\n  \"attributeValue\": \"{{attributeValue}}\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "status": "200",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json",
+                      "type": "text"
+                    }
+                  ],
+                  "body": "{\n  \"portfolioId\": {\n    \"name\": \"portfolioId\",\n    \"type\": \"integer\",\n    \"nullable\": false,\n    \"required\": false,\n    \"format\": \"int32\"\n  },\n  \"portfolioName\": {\n    \"name\": \"portfolioName\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioCity\": {\n    \"name\": \"portfolioCity\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioState\": {\n    \"name\": \"portfolioState\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"portfolioCountry\": {\n    \"name\": \"portfolioCountry\",\n    \"type\": \"string\",\n    \"nullable\": true,\n    \"required\": false\n  },\n  \"effectiveDate\": {\n    \"name\": \"effectiveDate\",\n    \"type\": \"string\",\n    \"nullable\": false,\n    \"required\": false,\n    \"format\": \"date-time\"\n  }\n}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "post_WeatherForecast Filtering",
+          "item": [
+            {
+              "name": "post_WeatherForecast_portfolioId_EQ",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"portfolioId\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"integer\",\n  \"condition\": \"EQ\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "post_WeatherForecast_portfolioName_EQ",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"portfolioName\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"string\",\n  \"condition\": \"EQ\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "post_WeatherForecast_portfolioName_NEQ",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"portfolioName\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"string\",\n  \"condition\": \"NEQ\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "post_WeatherForecast_portfolioName_Contains",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"portfolioName\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"string\",\n  \"condition\": \"Contains\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "post_WeatherForecast_portfolioCity_EQ",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"portfolioCity\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"string\",\n  \"condition\": \"EQ\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "post_WeatherForecast_portfolioCity_NEQ",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"portfolioCity\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"string\",\n  \"condition\": \"NEQ\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "post_WeatherForecast_portfolioCity_Contains",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"portfolioCity\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"string\",\n  \"condition\": \"Contains\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "post_WeatherForecast_portfolioState_EQ",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"portfolioState\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"string\",\n  \"condition\": \"EQ\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "post_WeatherForecast_portfolioState_NEQ",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"portfolioState\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"string\",\n  \"condition\": \"NEQ\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "post_WeatherForecast_portfolioState_Contains",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"portfolioState\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"string\",\n  \"condition\": \"Contains\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "post_WeatherForecast_portfolioCountry_EQ",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"portfolioCountry\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"string\",\n  \"condition\": \"EQ\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "post_WeatherForecast_portfolioCountry_NEQ",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"portfolioCountry\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"string\",\n  \"condition\": \"NEQ\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "post_WeatherForecast_portfolioCountry_Contains",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"portfolioCountry\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"string\",\n  \"condition\": \"Contains\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "post_WeatherForecast_effectiveDate_EQ",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"effectiveDate\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"string\",\n  \"condition\": \"EQ\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "post_WeatherForecast_effectiveDate_NEQ",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"effectiveDate\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"string\",\n  \"condition\": \"NEQ\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "post_WeatherForecast_effectiveDate_Contains",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/WeatherForecast",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "WeatherForecast"
+                  ],
+                  "query": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"attributeName\": \"effectiveDate\",\n  \"objectType\": \"PortfolioID\",\n  \"dataType\": \"string\",\n  \"condition\": \"Contains\",\n  \"attributeValue\": \"{{VALUE}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{AUTH}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{AUTH}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://api.example.com",
+      "type": "string"
+    }
+  ]
+}

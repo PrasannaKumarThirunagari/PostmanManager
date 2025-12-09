@@ -1,0 +1,30 @@
+# Python FastAPI Backend Dependencies
+# Swagger to Postman Collection Converter
+# Python 3.12+ Required
+
+# Core Framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
+
+# Data Validation and Settings
+pydantic>=2.9.0
+pydantic-settings>=2.5.0
+
+# YAML Parsing
+pyyaml>=6.0.2
+
+# Async File Operations
+aiofiles>=24.1.0
+
+# HTTP Client (if needed for external API calls)
+httpx>=0.27.0
+
+# CORS Support (built into FastAPI, but listed for reference)
+# FastAPI includes CORS middleware
+
+# Logging (Structured Logging)
+python-json-logger>=3.2.0
+
+# Environment Variables
+python-dotenv>=1.0.1
