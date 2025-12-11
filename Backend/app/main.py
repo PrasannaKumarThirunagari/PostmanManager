@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
+import os
 from app.config import settings
 from app.api.v1 import swagger, collections, conversions, health, environments, filtering_conditions, global_headers, status_scripts, documentation, default_api_configs, injection_responses, login_collection
 
@@ -47,6 +48,49 @@ app.include_router(documentation.router, prefix="/api/documentation", tags=["Doc
 app.include_router(default_api_configs.router, prefix="/api/default-api-configs", tags=["Default API Configs"])
 app.include_router(injection_responses.router, tags=["Injection Responses"])
 app.include_router(login_collection.router, prefix="/api/login-collection", tags=["Login Collection"])
+
+# Serve static files from React build (ONLY when build directory exists)
+# This won't affect the development setup - build directory only exists after npm run build
+from pathlib import Path
+
+# Check for build directory in multiple possible locations (development vs standalone)
+possible_build_dirs = [
+    Path(__file__).parent.parent.parent / "Frontend" / "build",  # Development root
+    Path(__file__).parent.parent.parent.parent / "Frontend" / "build",  # Standalone distribution
+    Path(__file__).parent.parent / "Frontend" / "build",  # Alternative structure
+]
+
+static_dir = None
+for build_dir in possible_build_dirs:
+    if build_dir.exists() and (build_dir / "index.html").exists():
+        static_dir = build_dir
+        break
+
+if static_dir:
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+    
+    logger.info(f"Serving static files from: {static_dir}")
+    
+    # Mount static files
+    static_files_dir = static_dir / "static"
+    if static_files_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(static_files_dir)), name="static")
+    
+    # Serve index.html for all non-API routes (React Router)
+    @app.get("/{full_path:path}")
+    async def serve_react_app(full_path: str):
+        """Serve React app for all non-API routes."""
+        # Don't serve API routes or static files
+        if full_path.startswith("api/") or full_path.startswith("static/") or full_path.startswith("docs"):
+            return JSONResponse(status_code=404, content={"detail": "Not found"})
+        
+        index_file = static_dir / "index.html"
+        if index_file.exists():
+            return FileResponse(str(index_file))
+        return JSONResponse(status_code=404, content={"detail": "Frontend not built"})
+else:
+    logger.info("Frontend build not found - running in API-only mode (development)")
 
 
 @app.exception_handler(Exception)
