@@ -1,7 +1,41 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import apiService from '../services/api.service';
 
 const Dashboard = () => {
+  const [stats, setStats] = useState({
+    swaggerFiles: 0,
+    collections: 0,
+    environments: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  const loadStats = async () => {
+    setLoading(true);
+    try {
+      // Fetch all stats in parallel
+      const [swaggerResponse, collectionsResponse, environmentsResponse] = await Promise.all([
+        apiService.get('/api/swagger/files').catch(() => ({ files: [] })),
+        apiService.get('/api/collections').catch(() => ({ collections: [] })),
+        apiService.get('/api/environments').catch(() => ({ environments: [] }))
+      ]);
+
+      setStats({
+        swaggerFiles: swaggerResponse.files?.length || 0,
+        collections: collectionsResponse.collections?.length || 0,
+        environments: environmentsResponse.environments?.length || 0
+      });
+    } catch (error) {
+      console.error('Failed to load dashboard stats:', error);
+      // Keep default values (0) on error
+    } finally {
+      setLoading(false);
+    }
+  };
   const cards = [
     {
       title: 'Swagger Converter',
@@ -77,7 +111,13 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-slate-600 text-sm font-medium mb-1">Swagger Files</p>
-              <p className="text-3xl font-bold text-slate-900">0</p>
+              <p className="text-3xl font-bold text-slate-900">
+                {loading ? (
+                  <span className="text-slate-400">...</span>
+                ) : (
+                  stats.swaggerFiles
+                )}
+              </p>
             </div>
             <div className="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center">
               <i className="bi bi-file-earmark-code text-blue-600 text-2xl"></i>
@@ -88,7 +128,13 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-slate-600 text-sm font-medium mb-1">Collections</p>
-              <p className="text-3xl font-bold text-slate-900">0</p>
+              <p className="text-3xl font-bold text-slate-900">
+                {loading ? (
+                  <span className="text-slate-400">...</span>
+                ) : (
+                  stats.collections
+                )}
+              </p>
             </div>
             <div className="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center">
               <i className="bi bi-collection text-green-600 text-2xl"></i>
@@ -99,7 +145,13 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-slate-600 text-sm font-medium mb-1">Environments</p>
-              <p className="text-3xl font-bold text-slate-900">0</p>
+              <p className="text-3xl font-bold text-slate-900">
+                {loading ? (
+                  <span className="text-slate-400">...</span>
+                ) : (
+                  stats.environments
+                )}
+              </p>
             </div>
             <div className="w-14 h-14 bg-purple-100 rounded-xl flex items-center justify-center">
               <i className="bi bi-globe text-purple-600 text-2xl"></i>
