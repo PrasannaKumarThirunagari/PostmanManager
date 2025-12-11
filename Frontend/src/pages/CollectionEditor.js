@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import apiService from '../services/api.service';
 
 const CollectionEditor = () => {
@@ -12,34 +12,29 @@ const CollectionEditor = () => {
   const [editingRequest, setEditingRequest] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editFormData, setEditFormData] = useState({
+    name: '',
+    method: 'GET',
+    urlRaw: '',
+    urlHost: '',
+    urlPath: '',
+    urlQuery: '',
     headers: '',
+    authType: 'none',
+    authValues: '',
     body: '',
     description: ''
   });
 
-  useEffect(() => {
-    loadCollections();
-  }, []);
-
-  useEffect(() => {
-    if (selectedCollectionId) {
-      loadCollectionRequests();
-    } else {
-      setCollectionItems([]);
-      setFullCollection(null);
-    }
-  }, [selectedCollectionId]);
-
-  const loadCollections = async () => {
+  const loadCollections = useCallback(async () => {
     try {
       const response = await apiService.get('/api/collections');
       setCollections(response.collections || []);
     } catch (error) {
       setMessage({ type: 'danger', text: error.message || 'Failed to load collections' });
     }
-  };
+  }, []);
 
-  const loadCollectionRequests = async () => {
+  const loadCollectionRequests = useCallback(async () => {
     if (!selectedCollectionId) return;
     
     setLoading(true);
@@ -64,7 +59,20 @@ const CollectionEditor = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCollectionId]);
+
+  useEffect(() => {
+    loadCollections();
+  }, [loadCollections]);
+
+  useEffect(() => {
+    if (selectedCollectionId) {
+      loadCollectionRequests();
+    } else {
+      setCollectionItems([]);
+      setFullCollection(null);
+    }
+  }, [selectedCollectionId, loadCollectionRequests]);
 
   // Improved flattening with better unique IDs
   const flattenItems = (items, parentPath = '', parentFolderName = '', index = 0) => {
@@ -152,13 +160,59 @@ const CollectionEditor = () => {
     }
     
     try {
-      const headers = request.request?.header || [];
-      const body = request.request?.body || {};
-      const description = request.request?.description || '';
+      const req = request.request;
+      const headers = req?.header || [];
+      const body = req?.body || {};
+      const description = req?.description || '';
+      const url = req?.url || {};
+      const auth = req?.auth || null;
+      
+      // Parse URL components
+      const urlRaw = url.raw || '';
+      const urlHost = Array.isArray(url.host) ? url.host.join('.') : (url.host || '');
+      const urlPath = Array.isArray(url.path) ? '/' + url.path.join('/') : (url.path || '');
+      const urlQuery = url.query || [];
+      
+      // Parse auth
+      let authType = 'none';
+      let authValues = '';
+      if (auth) {
+        authType = auth.type || 'none';
+        if (authType === 'bearer' && auth.bearer) {
+          const token = auth.bearer.find(item => item.key === 'token');
+          authValues = JSON.stringify({ token: token?.value || '' }, null, 2);
+        } else if (authType === 'basic' && auth.basic) {
+          const username = auth.basic.find(item => item.key === 'username');
+          const password = auth.basic.find(item => item.key === 'password');
+          authValues = JSON.stringify({
+            username: username?.value || '',
+            password: password?.value || ''
+          }, null, 2);
+        } else if (authType === 'apikey' && auth.apikey) {
+          const key = auth.apikey.find(item => item.key === 'key');
+          const value = auth.apikey.find(item => item.key === 'value');
+          const location = auth.apikey.find(item => item.key === 'in');
+          authValues = JSON.stringify({
+            key: key?.value || '',
+            value: value?.value || '',
+            location: location?.value || 'header'
+          }, null, 2);
+        } else if (authType !== 'none') {
+          authValues = JSON.stringify(auth, null, 2);
+        }
+      }
       
       setEditingRequest(request);
       setEditFormData({
+        name: request.name || '',
+        method: req?.method || 'GET',
+        urlRaw: urlRaw,
+        urlHost: urlHost,
+        urlPath: urlPath,
+        urlQuery: JSON.stringify(urlQuery, null, 2),
         headers: JSON.stringify(headers, null, 2),
+        authType: authType,
+        authValues: authValues,
         body: body.raw || (body ? JSON.stringify(body, null, 2) : ''),
         description: description || ''
       });
@@ -175,6 +229,12 @@ const CollectionEditor = () => {
     }
 
     try {
+      // Validate name
+      if (!editFormData.name || !editFormData.name.trim()) {
+        setMessage({ type: 'danger', text: 'Request name is required' });
+        return;
+      }
+      
       // Parse and validate headers
       let headers = [];
       try {
@@ -187,6 +247,133 @@ const CollectionEditor = () => {
         return;
       }
       
+      // Parse and validate query params
+      let queryParams = [];
+      try {
+        if (editFormData.urlQuery && editFormData.urlQuery.trim()) {
+          queryParams = JSON.parse(editFormData.urlQuery);
+          if (!Array.isArray(queryParams)) {
+            throw new Error('Query params must be an array');
+          }
+        }
+      } catch (e) {
+        setMessage({ type: 'danger', text: 'Invalid JSON format in query params. Must be a valid JSON array.' });
+        return;
+      }
+      
+      // Parse and validate auth
+      let auth = null;
+      if (editFormData.authType && editFormData.authType !== 'none') {
+        try {
+          if (editFormData.authValues && editFormData.authValues.trim()) {
+            const authData = JSON.parse(editFormData.authValues);
+            
+            if (editFormData.authType === 'bearer') {
+              auth = {
+                type: 'bearer',
+                bearer: [
+                  { key: 'token', value: authData.token || '', type: 'string' }
+                ]
+              };
+            } else if (editFormData.authType === 'basic') {
+              auth = {
+                type: 'basic',
+                basic: [
+                  { key: 'username', value: authData.username || '', type: 'string' },
+                  { key: 'password', value: authData.password || '', type: 'string' }
+                ]
+              };
+            } else if (editFormData.authType === 'apikey') {
+              auth = {
+                type: 'apikey',
+                apikey: [
+                  { key: 'key', value: authData.key || '', type: 'string' },
+                  { key: 'value', value: authData.value || '', type: 'string' },
+                  { key: 'in', value: authData.location || 'header', type: 'string' }
+                ]
+              };
+            }
+          }
+        } catch (e) {
+          setMessage({ type: 'danger', text: 'Invalid JSON format in auth values.' });
+          return;
+        }
+      }
+      
+      // Build URL
+      let url = {};
+      if (editFormData.urlRaw && editFormData.urlRaw.trim()) {
+        // Use raw URL if provided
+        const rawUrl = editFormData.urlRaw.trim();
+        
+        // Check if URL contains variables (e.g., {{baseUrl}})
+        if (rawUrl.includes('{{') && rawUrl.includes('}}')) {
+          // URL contains variables - keep as raw and try to extract components
+          url.raw = rawUrl;
+          
+          // Try to extract path from raw URL (after variable)
+          const pathMatch = rawUrl.match(/(?:}}|\/)(\/[^?]*)/);
+          if (pathMatch) {
+            const pathStr = pathMatch[1];
+            const pathParts = pathStr.split('/').filter(p => p);
+            if (pathParts.length > 0) {
+              url.path = pathParts;
+            }
+          }
+        } else {
+          // Try to parse as standard URL
+          try {
+            const urlObj = new URL(rawUrl);
+            url.raw = rawUrl;
+            url.host = [urlObj.hostname];
+            const pathParts = urlObj.pathname.split('/').filter(p => p);
+            if (pathParts.length > 0) {
+              url.path = pathParts;
+            }
+          } catch (e) {
+            // Invalid URL format, keep as raw
+            url.raw = rawUrl;
+          }
+        }
+      } else {
+        // Build from components
+        const hostParts = editFormData.urlHost ? editFormData.urlHost.split('.').filter(p => p) : [];
+        const pathParts = editFormData.urlPath ? editFormData.urlPath.split('/').filter(p => p) : [];
+        
+        url = {
+          host: hostParts.length > 0 ? hostParts : [],
+          path: pathParts.length > 0 ? pathParts : []
+        };
+        
+        // Build raw URL from components
+        if (hostParts.length > 0) {
+          // Check if host contains variables
+          const hostStr = hostParts.join('.');
+          if (hostStr.includes('{{')) {
+            // Host contains variables - build raw URL with variables
+            const path = pathParts.length > 0 ? '/' + pathParts.join('/') : '';
+            const query = queryParams.length > 0 ? '?' + queryParams.map(q => `${q.key}=${q.value || ''}`).join('&') : '';
+            url.raw = `${hostStr}${path}${query}`;
+          } else {
+            // Standard host - use https protocol
+            const protocol = 'https';
+            const host = hostParts.join('.');
+            const path = pathParts.length > 0 ? '/' + pathParts.join('/') : '';
+            const query = queryParams.length > 0 ? '?' + queryParams.map(q => `${q.key}=${q.value || ''}`).join('&') : '';
+            url.raw = `${protocol}://${host}${path}${query}`;
+          }
+        } else if (pathParts.length > 0) {
+          // Only path provided (might be relative or contain variables)
+          const path = '/' + pathParts.join('/');
+          const query = queryParams.length > 0 ? '?' + queryParams.map(q => `${q.key}=${q.value || ''}`).join('&') : '';
+          url.raw = `${path}${query}`;
+        }
+      }
+      
+      if (queryParams.length > 0) {
+        url.query = queryParams;
+      }
+      
       // Find the request in the full collection structure
       const found = findRequestInCollection(fullCollection.item || [], editingRequest.id);
       if (!found || !found.item) {
@@ -196,17 +383,48 @@ const CollectionEditor = () => {
       
       // Update the request directly in the full collection
       const request = found.item;
+      
+      // Update name
+      request.name = editFormData.name.trim();
+      
       if (!request.request) {
         request.request = {};
       }
       
+      // Update method
+      request.request.method = editFormData.method.toUpperCase();
+      
+      // Update URL
+      request.request.url = url;
+      
+      // Update headers
       request.request.header = headers;
-      request.request.description = editFormData.description;
+      
+      // Update auth
+      if (auth) {
+        request.request.auth = auth;
+      } else {
+        delete request.request.auth;
+      }
+      
+      // Update description
+      request.request.description = editFormData.description || '';
       
       // Update body
       if (editFormData.body && editFormData.body.trim()) {
         if (request.request.body) {
           request.request.body.raw = editFormData.body;
+          // Ensure body mode is set
+          if (!request.request.body.mode) {
+            request.request.body.mode = 'raw';
+          }
+          if (!request.request.body.options) {
+            request.request.body.options = {
+              raw: {
+                language: 'json'
+              }
+            };
+          }
         } else {
           request.request.body = {
             mode: "raw",
@@ -218,6 +436,9 @@ const CollectionEditor = () => {
             }
           };
         }
+      } else {
+        // Remove body if empty
+        delete request.request.body;
       }
       
       // Force React to detect the change
@@ -228,9 +449,13 @@ const CollectionEditor = () => {
         if (item.id === editingRequest.id) {
           return {
             ...item,
+            name: request.name,
             request: {
               ...item.request,
+              method: request.request.method,
+              url: request.request.url,
               header: headers,
+              auth: auth,
               description: editFormData.description,
               body: request.request.body
             }
@@ -591,9 +816,9 @@ const CollectionEditor = () => {
       {/* Edit Modal */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowEditModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex justify-between items-center">
-              <h2 className="text-xl font-bold text-white">Edit Request: {editingRequest?.name}</h2>
+              <h2 className="text-xl font-bold text-white">Edit Request</h2>
               <button
                 onClick={() => setShowEditModal(false)}
                 className="text-white hover:text-slate-200 transition-colors"
@@ -601,41 +826,189 @@ const CollectionEditor = () => {
                 <i className="bi bi-x-lg text-2xl"></i>
               </button>
             </div>
-            <div className="p-6 overflow-y-auto flex-1 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
-                <textarea
-                  rows={3}
-                  value={editFormData.description}
-                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
-                  placeholder="Request description"
-                  className="input-modern"
-                />
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              {/* Basic Info */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
+                  <i className="bi bi-info-circle mr-2"></i>Basic Information
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Request Name *</label>
+                    <input
+                      type="text"
+                      value={editFormData.name}
+                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                      placeholder="Request name"
+                      className="input-modern"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Method *</label>
+                    <select
+                      value={editFormData.method}
+                      onChange={(e) => setEditFormData({ ...editFormData, method: e.target.value })}
+                      className="select-modern"
+                    >
+                      <option value="GET">GET</option>
+                      <option value="POST">POST</option>
+                      <option value="PUT">PUT</option>
+                      <option value="PATCH">PATCH</option>
+                      <option value="DELETE">DELETE</option>
+                      <option value="HEAD">HEAD</option>
+                      <option value="OPTIONS">OPTIONS</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
+                  <textarea
+                    rows={3}
+                    value={editFormData.description}
+                    onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                    placeholder="Request description"
+                    className="input-modern"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Headers (JSON Array)</label>
-                <textarea
-                  rows={6}
-                  value={editFormData.headers}
-                  onChange={(e) => setEditFormData({ ...editFormData, headers: e.target.value })}
-                  placeholder='[{"key": "Content-Type", "value": "application/json", "type": "text"}]'
-                  className="input-modern font-mono text-sm"
-                />
-                <p className="mt-1 text-sm text-slate-500">
-                  Enter headers as JSON array. Example: [&#123;"key": "Content-Type", "value": "application/json"&#125;]
-                </p>
+              {/* URL */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
+                  <i className="bi bi-link-45deg mr-2"></i>URL
+                </h3>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Raw URL (or use components below)</label>
+                  <input
+                    type="text"
+                    value={editFormData.urlRaw}
+                    onChange={(e) => setEditFormData({ ...editFormData, urlRaw: e.target.value })}
+                    placeholder="https://api.example.com/v1/users"
+                    className="input-modern font-mono text-sm"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Host</label>
+                    <input
+                      type="text"
+                      value={editFormData.urlHost}
+                      onChange={(e) => setEditFormData({ ...editFormData, urlHost: e.target.value })}
+                      placeholder="api.example.com"
+                      className="input-modern font-mono text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Path</label>
+                    <input
+                      type="text"
+                      value={editFormData.urlPath}
+                      onChange={(e) => setEditFormData({ ...editFormData, urlPath: e.target.value })}
+                      placeholder="/v1/users"
+                      className="input-modern font-mono text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Query Parameters (JSON Array)</label>
+                  <textarea
+                    rows={4}
+                    value={editFormData.urlQuery}
+                    onChange={(e) => setEditFormData({ ...editFormData, urlQuery: e.target.value })}
+                    placeholder='[{"key": "page", "value": "1", "type": "text"}]'
+                    className="input-modern font-mono text-sm"
+                  />
+                  <p className="mt-1 text-sm text-slate-500">
+                    Enter query parameters as JSON array. Example: [&#123;"key": "page", "value": "1"&#125;]
+                  </p>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Body</label>
-                <textarea
-                  rows={8}
-                  value={editFormData.body}
-                  onChange={(e) => setEditFormData({ ...editFormData, body: e.target.value })}
-                  placeholder="Request body content (JSON, XML, etc.)"
-                  className="input-modern font-mono text-sm"
-                />
+              {/* Headers */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
+                  <i className="bi bi-heading mr-2"></i>Headers
+                </h3>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Headers (JSON Array)</label>
+                  <textarea
+                    rows={6}
+                    value={editFormData.headers}
+                    onChange={(e) => setEditFormData({ ...editFormData, headers: e.target.value })}
+                    placeholder='[{"key": "Content-Type", "value": "application/json", "type": "text"}]'
+                    className="input-modern font-mono text-sm"
+                  />
+                  <p className="mt-1 text-sm text-slate-500">
+                    Enter headers as JSON array. Example: [&#123;"key": "Content-Type", "value": "application/json"&#125;]
+                  </p>
+                </div>
+              </div>
+
+              {/* Authentication */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
+                  <i className="bi bi-shield-lock mr-2"></i>Authentication
+                </h3>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Auth Type</label>
+                  <select
+                    value={editFormData.authType}
+                    onChange={(e) => {
+                      setEditFormData({ 
+                        ...editFormData, 
+                        authType: e.target.value,
+                        authValues: e.target.value === 'none' ? '' : editFormData.authValues
+                      });
+                    }}
+                    className="select-modern"
+                  >
+                    <option value="none">None</option>
+                    <option value="bearer">Bearer Token</option>
+                    <option value="basic">Basic Auth</option>
+                    <option value="apikey">API Key</option>
+                  </select>
+                </div>
+                {editFormData.authType !== 'none' && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Auth Values (JSON)
+                      {editFormData.authType === 'bearer' && ' - Example: {"token": "your-token"}'}
+                      {editFormData.authType === 'basic' && ' - Example: {"username": "user", "password": "pass"}'}
+                      {editFormData.authType === 'apikey' && ' - Example: {"key": "X-API-Key", "value": "key-value", "location": "header"}'}
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={editFormData.authValues}
+                      onChange={(e) => setEditFormData({ ...editFormData, authValues: e.target.value })}
+                      placeholder={
+                        editFormData.authType === 'bearer' ? '{"token": "your-token"}' :
+                        editFormData.authType === 'basic' ? '{"username": "user", "password": "pass"}' :
+                        '{"key": "X-API-Key", "value": "key-value", "location": "header"}'
+                      }
+                      className="input-modern font-mono text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Body */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
+                  <i className="bi bi-file-text mr-2"></i>Request Body
+                </h3>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Body Content</label>
+                  <textarea
+                    rows={8}
+                    value={editFormData.body}
+                    onChange={(e) => setEditFormData({ ...editFormData, body: e.target.value })}
+                    placeholder="Request body content (JSON, XML, etc.)"
+                    className="input-modern font-mono text-sm"
+                  />
+                  <p className="mt-1 text-sm text-slate-500">
+                    Enter the request body content. For JSON, use proper JSON format.
+                  </p>
+                </div>
               </div>
             </div>
             <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">

@@ -30,6 +30,11 @@ const GridFiltering = () => {
     attributeValue: { mode: 'template', value: '{{attributeValue}}' }
   });
   const [selectedConditions, setSelectedConditions] = useState({}); // {attributeName: [conditions]}
+  const [customAttributes, setCustomAttributes] = useState({}); // {attributeName: {type, nullable, conditions}}
+  const [editingAttribute, setEditingAttribute] = useState(null); // Currently editing attribute name
+  const [showAddAttribute, setShowAddAttribute] = useState(false);
+  const [customConditions, setCustomConditions] = useState({}); // {attributeName: [customCondition1, customCondition2, ...]}
+  const [addingCustomCondition, setAddingCustomCondition] = useState(null); // attributeName for which we're adding custom condition
 
   // Section 4: Collection Generation
   const [generating, setGenerating] = useState(false);
@@ -70,6 +75,8 @@ const GridFiltering = () => {
         attributeValue: { mode: 'template', value: '{{attributeValue}}' }
       });
       setSelectedConditions({});
+      setCustomAttributes({});
+      setCustomConditions({});
     }
   }, [selectedRequestId, requests]);
 
@@ -300,10 +307,13 @@ const GridFiltering = () => {
         console.error('Failed to extract attributes:', error);
         setResponseAttributes({});
         setSelectedConditions({});
+        setCustomAttributes({});
       }
     } else {
       setResponseAttributes({});
       setSelectedConditions({});
+      setCustomAttributes({});
+      setCustomConditions({});
     }
   };
 
@@ -395,6 +405,37 @@ const GridFiltering = () => {
         [attributeName]: updated
       };
     });
+    
+    // If it's a custom condition (not in available conditions), track it
+    const allAttributes = {...responseAttributes, ...customAttributes};
+    const attrData = allAttributes[attributeName];
+    const dataType = attrData?.type || 'string';
+    let availableConditions = conditionsCache[dataType] || conditionsCache[dataType.toLowerCase()];
+    if (!availableConditions) {
+      if (dataType === 'string') {
+        availableConditions = ['EQ', 'NEQ', 'Contains', 'NotContains'];
+      } else if (['integer', 'number', 'int32', 'int64', 'float', 'double'].includes(dataType)) {
+        availableConditions = ['EQ', 'NEQ', 'GT', 'LT', 'GTE', 'LTE'];
+      } else if (dataType === 'boolean') {
+        availableConditions = ['EQ', 'NEQ'];
+      } else {
+        availableConditions = ['EQ', 'NEQ'];
+      }
+    }
+    
+    if (!availableConditions.includes(condition)) {
+      // It's a custom condition
+      setCustomConditions(prev => {
+        const current = prev[attributeName] || [];
+        if (!current.includes(condition)) {
+          return {
+            ...prev,
+            [attributeName]: [...current, condition]
+          };
+        }
+        return prev;
+      });
+    }
   };
 
   const selectAllConditions = async (attributeName, dataType) => {
@@ -415,24 +456,30 @@ const GridFiltering = () => {
   const calculateTotalRequests = () => {
     if (generateAllConditions) {
       let total = 0;
-      Object.entries(responseAttributes).forEach(([attrName, attrData]) => {
+      const allAttributes = {...responseAttributes, ...customAttributes};
+      Object.entries(allAttributes).forEach(([attrName, attrData]) => {
         const dataType = attrData.type || 'string';
         // Use cached conditions or fallback
         const cached = conditionsCache[dataType] || conditionsCache[dataType.toLowerCase()];
+        let conditionCount = 0;
         if (cached) {
-          total += cached.length;
+          conditionCount = cached.length;
         } else {
           // Fallback calculation
           if (dataType === 'string') {
-            total += 4;
+            conditionCount = 4;
           } else if (['integer', 'number', 'int32', 'int64', 'float', 'double'].includes(dataType)) {
-            total += 6;
+            conditionCount = 6;
           } else if (dataType === 'boolean') {
-            total += 2;
+            conditionCount = 2;
           } else {
-            total += 2;
+            conditionCount = 2;
           }
         }
+        // Add custom conditions for this attribute
+        const customConds = customConditions[attrName] || [];
+        conditionCount += customConds.length;
+        total += conditionCount;
       });
       return total;
     } else {
@@ -446,8 +493,9 @@ const GridFiltering = () => {
       return;
     }
 
-    if (Object.keys(responseAttributes).length === 0) {
-      setMessage({ type: 'warning', text: 'No response attributes found. Please select a valid response.' });
+    const allAttributes = {...responseAttributes, ...customAttributes};
+    if (Object.keys(allAttributes).length === 0) {
+      setMessage({ type: 'warning', text: 'No response attributes found. Please select a valid response or add custom attributes.' });
       return;
     }
 
@@ -472,9 +520,11 @@ const GridFiltering = () => {
         mappings: [], // Not used in iteration mode
         filters: [], // Not used in iteration mode
         object_type: fieldMappings.objectType.value || 'Object',
-        selected_conditions: generateAllConditions ? null : selectedConditions,
+        selected_conditions: generateAllConditions ? null : selectedConditions, // When generateAllConditions is true, send null; otherwise send selected conditions (includes custom)
         generate_all_conditions: generateAllConditions,
-        request_body_mappings: requestBodyMappings // New: send request body mappings
+        request_body_mappings: requestBodyMappings, // New: send request body mappings
+        custom_attributes: customAttributes, // Send custom attributes
+        custom_conditions: customConditions // Send custom conditions mapping
       });
 
       setMessage({ 
@@ -850,19 +900,137 @@ const GridFiltering = () => {
 
                   {/* Response Attributes with Condition Selection */}
                   <div className="bg-white rounded-xl p-6 border border-slate-200">
-                    <h3 className="text-lg font-semibold text-slate-900 mb-4">Response Attributes and Condition Selection</h3>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold text-slate-900">Response Attributes and Condition Selection</h3>
+                      <button
+                        onClick={() => setShowAddAttribute(true)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium"
+                      >
+                        <i className="bi bi-plus-circle"></i>
+                        Add Custom Attribute
+                      </button>
+                    </div>
+                    
+                    {/* Add Custom Attribute Modal */}
+                    {showAddAttribute && (
+                      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowAddAttribute(false)}>
+                        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+                          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex justify-between items-center rounded-t-2xl">
+                            <h3 className="text-xl font-bold text-white">Add Custom Attribute</h3>
+                            <button
+                              onClick={() => setShowAddAttribute(false)}
+                              className="text-white hover:text-slate-200 transition-colors"
+                            >
+                              <i className="bi bi-x-lg text-2xl"></i>
+                            </button>
+                          </div>
+                          <div className="p-6 space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-2">Attribute Name *</label>
+                              <input
+                                type="text"
+                                placeholder="e.g., customField"
+                                className="input-modern"
+                                id="new-attr-name"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-2">Data Type *</label>
+                              <select className="select-modern" id="new-attr-type">
+                                <option value="string">string</option>
+                                <option value="integer">integer</option>
+                                <option value="number">number</option>
+                                <option value="boolean">boolean</option>
+                                <option value="date">date</option>
+                                <option value="datetime">datetime</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
+                                  id="new-attr-nullable"
+                                />
+                                <span className="text-sm font-medium text-slate-700">Nullable</span>
+                              </label>
+                            </div>
+                            <div className="flex gap-3 pt-4 border-t border-slate-200">
+                              <button
+                                onClick={() => setShowAddAttribute(false)}
+                                className="btn-secondary-modern flex-1"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const nameInput = document.getElementById('new-attr-name');
+                                  const typeInput = document.getElementById('new-attr-type');
+                                  const nullableInput = document.getElementById('new-attr-nullable');
+                                  
+                                  const attrName = nameInput?.value.trim();
+                                  const dataType = typeInput?.value || 'string';
+                                  const nullable = nullableInput?.checked || false;
+                                  
+                                  if (!attrName) {
+                                    setMessage({ type: 'warning', text: 'Attribute name is required' });
+                                    return;
+                                  }
+                                  
+                                  // Check if attribute already exists
+                                  if (responseAttributes[attrName] || customAttributes[attrName]) {
+                                    setMessage({ type: 'warning', text: `Attribute "${attrName}" already exists` });
+                                    return;
+                                  }
+                                  
+                                  // Add custom attribute
+                                  setCustomAttributes(prev => ({
+                                    ...prev,
+                                    [attrName]: {
+                                      type: dataType,
+                                      nullable: nullable,
+                                      name: attrName
+                                    }
+                                  }));
+                                  
+                                  // Initialize conditions for this attribute
+                                  setSelectedConditions(prev => ({
+                                    ...prev,
+                                    [attrName]: []
+                                  }));
+                                  
+                                  // Load conditions for this data type
+                                  getConditionsForType(dataType);
+                                  
+                                  setShowAddAttribute(false);
+                                  setMessage({ type: 'success', text: `Custom attribute "${attrName}" added successfully` });
+                                }}
+                                className="btn-primary-modern flex-1"
+                              >
+                                <i className="bi bi-check-lg mr-2"></i>
+                                Add Attribute
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-slate-200">
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '25%' }}>Attribute Name</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '20%' }}>Attribute Name</th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '15%' }}>Data Type</th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '10%' }}>Nullable</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '50%' }}>Select Conditions</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '45%' }}>Select Conditions</th>
+                            <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '10%' }}>Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {Object.entries(responseAttributes).map(([attrName, attrData]) => {
+                          {/* Merge response attributes and custom attributes */}
+                          {Object.entries({...responseAttributes, ...customAttributes}).map(([attrName, attrData]) => {
+                            const isCustom = customAttributes[attrName] !== undefined;
                             const dataType = attrData.type || 'string';
                             // Get conditions from cache or use fallback
                             let availableConditions = conditionsCache[dataType] || conditionsCache[dataType.toLowerCase()];
@@ -883,38 +1051,149 @@ const GridFiltering = () => {
                             return (
                               <tr key={attrName} className="hover:bg-slate-50 transition-colors">
                                 <td className="px-4 py-4">
-                                  <strong className="text-slate-900">{attrName}</strong>
-                                  {attrData.name && attrData.name !== attrName && (
-                                    <div className="text-xs text-slate-500 mt-1">({attrData.name})</div>
+                                  {editingAttribute === attrName ? (
+                                    <input
+                                      type="text"
+                                      defaultValue={attrName}
+                                      onBlur={(e) => {
+                                        const newName = e.target.value.trim();
+                                        if (newName && newName !== attrName) {
+                                          if (responseAttributes[newName] || customAttributes[newName]) {
+                                            setMessage({ type: 'warning', text: `Attribute "${newName}" already exists` });
+                                            setEditingAttribute(null);
+                                            return;
+                                          }
+                                          
+                                          // Update attribute name
+                                          if (isCustom) {
+                                            const attr = customAttributes[attrName];
+                                            setCustomAttributes(prev => {
+                                              const updated = { ...prev };
+                                              delete updated[attrName];
+                                              updated[newName] = attr;
+                                              return updated;
+                                            });
+                                            
+                                            // Update selected conditions
+                                            setSelectedConditions(prev => {
+                                              const updated = { ...prev };
+                                              if (updated[attrName]) {
+                                                updated[newName] = updated[attrName];
+                                                delete updated[attrName];
+                                              }
+                                              return updated;
+                                            });
+                                            // Update custom conditions
+                                            setCustomConditions(prev => {
+                                              const updated = { ...prev };
+                                              if (updated[attrName]) {
+                                                updated[newName] = updated[attrName];
+                                                delete updated[attrName];
+                                              }
+                                              return updated;
+                                            });
+                                          }
+                                        }
+                                        setEditingAttribute(null);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.target.blur();
+                                        } else if (e.key === 'Escape') {
+                                          setEditingAttribute(null);
+                                        }
+                                      }}
+                                      className="px-2 py-1 text-sm border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                      autoFocus
+                                    />
+                                  ) : (
+                                    <div className="flex items-center gap-2">
+                                      <strong className="text-slate-900">{attrName}</strong>
+                                      {isCustom && (
+                                        <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full">Custom</span>
+                                      )}
+                                      {!isCustom && attrData.name && attrData.name !== attrName && (
+                                        <div className="text-xs text-slate-500">({attrData.name})</div>
+                                      )}
+                                    </div>
                                   )}
                                 </td>
                                 <td className="px-4 py-4">
-                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                                    dataType === 'string' 
-                                      ? 'bg-blue-100 text-blue-800' 
-                                      : dataType === 'integer' || dataType === 'number'
-                                      ? 'bg-green-100 text-green-800'
-                                      : 'bg-yellow-100 text-yellow-800'
-                                  }`}>
-                                    {dataType}
-                                  </span>
-                                  {attrData.format && (
+                                  {editingAttribute === attrName ? (
+                                    <select
+                                      defaultValue={dataType}
+                                      onChange={(e) => {
+                                        if (isCustom) {
+                                          setCustomAttributes(prev => ({
+                                            ...prev,
+                                            [attrName]: {
+                                              ...prev[attrName],
+                                              type: e.target.value
+                                            }
+                                          }));
+                                          // Reload conditions for new type
+                                          getConditionsForType(e.target.value);
+                                        }
+                                      }}
+                                      className="px-2 py-1 text-sm border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                      <option value="string">string</option>
+                                      <option value="integer">integer</option>
+                                      <option value="number">number</option>
+                                      <option value="boolean">boolean</option>
+                                      <option value="date">date</option>
+                                      <option value="datetime">datetime</option>
+                                    </select>
+                                  ) : (
+                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                      dataType === 'string' 
+                                        ? 'bg-blue-100 text-blue-800' 
+                                        : dataType === 'integer' || dataType === 'number'
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-yellow-100 text-yellow-800'
+                                    }`}>
+                                      {dataType}
+                                    </span>
+                                  )}
+                                  {!editingAttribute && attrData.format && (
                                     <div className="text-xs text-slate-500 mt-1">({attrData.format})</div>
                                   )}
                                 </td>
                                 <td className="px-4 py-4">
-                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                                    attrData.nullable 
-                                      ? 'bg-cyan-100 text-cyan-800' 
-                                      : 'bg-slate-100 text-slate-600'
-                                  }`}>
-                                    {attrData.nullable ? 'Yes' : 'No'}
-                                  </span>
+                                  {editingAttribute === attrName ? (
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        defaultChecked={attrData.nullable}
+                                        onChange={(e) => {
+                                          if (isCustom) {
+                                            setCustomAttributes(prev => ({
+                                              ...prev,
+                                              [attrName]: {
+                                                ...prev[attrName],
+                                                nullable: e.target.checked
+                                              }
+                                            }));
+                                          }
+                                        }}
+                                        className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
+                                      />
+                                      <span className="text-xs text-slate-700">Nullable</span>
+                                    </label>
+                                  ) : (
+                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                      attrData.nullable 
+                                        ? 'bg-cyan-100 text-cyan-800' 
+                                        : 'bg-slate-100 text-slate-600'
+                                    }`}>
+                                      {attrData.nullable ? 'Yes' : 'No'}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-4">
                                   {!generateAllConditions ? (
                                     <div>
-                                      <div className="mb-3 flex gap-2">
+                                      <div className="mb-3 flex gap-2 flex-wrap">
                                         <button
                                           onClick={() => selectAllConditions(attrName, dataType)}
                                           className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium"
@@ -927,7 +1206,52 @@ const GridFiltering = () => {
                                         >
                                           Deselect All
                                         </button>
+                                        <button
+                                          onClick={() => setAddingCustomCondition(addingCustomCondition === attrName ? null : attrName)}
+                                          className="px-3 py-1.5 text-sm bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors font-medium flex items-center gap-1"
+                                        >
+                                          <i className="bi bi-plus-circle"></i>
+                                          Add Custom
+                                        </button>
                                       </div>
+                                      
+                                      {/* Custom condition input */}
+                                      {addingCustomCondition === attrName && (
+                                        <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                                          <div className="flex gap-2">
+                                            <input
+                                              type="text"
+                                              placeholder="Enter custom condition (e.g., CUSTOM_COND)"
+                                              className="flex-1 px-3 py-1.5 text-sm border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                  const customCond = e.target.value.trim();
+                                                  if (customCond) {
+                                                    if (!selectedForAttr.includes(customCond)) {
+                                                      toggleCondition(attrName, customCond);
+                                                      e.target.value = '';
+                                                      setAddingCustomCondition(null);
+                                                    } else {
+                                                      setMessage({ type: 'warning', text: `Condition "${customCond}" already selected` });
+                                                    }
+                                                  }
+                                                } else if (e.key === 'Escape') {
+                                                  setAddingCustomCondition(null);
+                                                }
+                                              }}
+                                              autoFocus
+                                            />
+                                            <button
+                                              onClick={() => setAddingCustomCondition(null)}
+                                              className="px-3 py-1.5 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+                                            >
+                                              <i className="bi bi-x-lg"></i>
+                                            </button>
+                                          </div>
+                                          <p className="text-xs text-purple-600 mt-1">Press Enter to add, Escape to cancel</p>
+                                        </div>
+                                      )}
+                                      
                                       <div className="flex flex-wrap gap-2">
                                         {availableConditions.map(condition => (
                                           <label key={condition} className="flex items-center gap-2 cursor-pointer">
@@ -940,18 +1264,115 @@ const GridFiltering = () => {
                                             <span className="text-sm text-slate-700">{condition}</span>
                                           </label>
                                         ))}
+                                        {/* Show custom conditions */}
+                                        {(customConditions[attrName] || []).map(customCond => {
+                                          if (availableConditions.includes(customCond)) return null; // Already shown above
+                                          return (
+                                            <label key={`custom-${customCond}`} className="flex items-center gap-2 cursor-pointer">
+                                              <input
+                                                type="checkbox"
+                                                checked={selectedForAttr.includes(customCond)}
+                                                onChange={() => toggleCondition(attrName, customCond)}
+                                                className="w-4 h-4 text-purple-600 border-purple-300 rounded focus:ring-2 focus:ring-purple-500"
+                                              />
+                                              <span className="text-sm text-purple-700 font-medium">{customCond}</span>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.preventDefault();
+                                                  setCustomConditions(prev => {
+                                                    const updated = { ...prev };
+                                                    if (updated[attrName]) {
+                                                      updated[attrName] = updated[attrName].filter(c => c !== customCond);
+                                                      if (updated[attrName].length === 0) {
+                                                        delete updated[attrName];
+                                                      }
+                                                    }
+                                                    return updated;
+                                                  });
+                                                  // Remove from selected conditions
+                                                  setSelectedConditions(prev => {
+                                                    const updated = { ...prev };
+                                                    if (updated[attrName]) {
+                                                      updated[attrName] = updated[attrName].filter(c => c !== customCond);
+                                                      if (updated[attrName].length === 0) {
+                                                        delete updated[attrName];
+                                                      }
+                                                    }
+                                                    return updated;
+                                                  });
+                                                }}
+                                                className="ml-1 text-red-600 hover:text-red-800"
+                                                title="Remove custom condition"
+                                              >
+                                                <i className="bi bi-x-circle text-xs"></i>
+                                              </button>
+                                            </label>
+                                          );
+                                        })}
                                       </div>
                                     </div>
                                   ) : (
                                     <div>
                                       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-800">
-                                        {availableConditions.length} conditions will be generated
+                                        {availableConditions.length + (customConditions[attrName]?.length || 0)} conditions will be generated
                                       </span>
                                       <div className="mt-2 text-xs text-slate-500">
-                                        {availableConditions.join(', ')}
+                                        {[...availableConditions, ...(customConditions[attrName] || [])].join(', ')}
                                       </div>
                                     </div>
                                   )}
+                                </td>
+                                <td className="px-4 py-4 text-center">
+                                  <div className="flex items-center justify-center gap-2">
+                                    {!editingAttribute && (
+                                      <>
+                                        <button
+                                          onClick={() => setEditingAttribute(attrName)}
+                                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                          title="Edit attribute"
+                                        >
+                                          <i className="bi bi-pencil"></i>
+                                        </button>
+                                        {isCustom && (
+                                          <button
+                                            onClick={() => {
+                                              if (window.confirm(`Are you sure you want to delete custom attribute "${attrName}"?`)) {
+                                                setCustomAttributes(prev => {
+                                                  const updated = { ...prev };
+                                                  delete updated[attrName];
+                                                  return updated;
+                                                });
+                                                setSelectedConditions(prev => {
+                                                  const updated = { ...prev };
+                                                  delete updated[attrName];
+                                                  return updated;
+                                                });
+                                                setCustomConditions(prev => {
+                                                  const updated = { ...prev };
+                                                  delete updated[attrName];
+                                                  return updated;
+                                                });
+                                                setMessage({ type: 'success', text: `Custom attribute "${attrName}" deleted` });
+                                              }
+                                            }}
+                                            className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                            title="Delete custom attribute"
+                                          >
+                                            <i className="bi bi-trash"></i>
+                                          </button>
+                                        )}
+                                      </>
+                                    )}
+                                    {editingAttribute === attrName && (
+                                      <button
+                                        onClick={() => setEditingAttribute(null)}
+                                        className="p-1.5 text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                                        title="Cancel editing"
+                                      >
+                                        <i className="bi bi-x-lg"></i>
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -979,7 +1400,7 @@ const GridFiltering = () => {
                 <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg">
                   <strong>Summary:</strong>
                   <ul className="list-disc list-inside mt-2 space-y-1">
-                    <li>Response Attributes: {Object.keys(responseAttributes).length}</li>
+                    <li>Response Attributes: {Object.keys({...responseAttributes, ...customAttributes}).length} ({Object.keys(responseAttributes).length} from response, {Object.keys(customAttributes).length} custom)</li>
                     <li>Object Type: {fieldMappings.objectType.value || 'Not set'}</li>
                     <li>Total Requests to Generate: <strong>{calculateTotalRequests()}</strong></li>
                     <li>Generation Mode: {generateAllConditions ? 'All Conditions' : 'Selected Conditions Only'}</li>

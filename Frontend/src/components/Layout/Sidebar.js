@@ -4,36 +4,57 @@ import { Link, useLocation } from 'react-router-dom';
 const Sidebar = ({ collapsed }) => {
   const location = useLocation();
   const [expandedGroups, setExpandedGroups] = useState({
-    conversion: true,
-    postman: true,
-    configuration: true,
-    advanced: true
+    overview: true,
+    swagger: true,
+    collections: true,
+    security: true,
+    export: true,
+    configuration: true
   });
 
   const menuGroups = [
     {
-      id: 'main',
-      label: null, // No group header for main items
+      id: 'overview',
+      label: 'Overview',
+      icon: 'bi-speedometer2',
       items: [
         { path: '/', icon: 'bi-speedometer2', label: 'Dashboard' }
       ]
     },
     {
-      id: 'conversion',
-      label: 'Conversion',
-      icon: 'bi-arrow-repeat',
+      id: 'swagger',
+      label: 'Swagger',
+      icon: 'bi-file-earmark-code',
       items: [
         { path: '/swagger', icon: 'bi-file-earmark-code', label: 'Swagger Converter' },
         { path: '/manage-swagger', icon: 'bi-folder', label: 'Manage Swagger' }
       ]
     },
     {
-      id: 'postman',
-      label: 'Postman Tools',
+      id: 'collections',
+      label: 'Collections',
       icon: 'bi-collection',
       items: [
         { path: '/postman', icon: 'bi-collection', label: 'Postman Manager' },
         { path: '/collection-editor', icon: 'bi-pencil-square', label: 'Collection Editor' },
+        { path: '/merge-collections', icon: 'bi-diagram-3', label: 'Merge Collections' },
+        { path: '/grid-filtering', icon: 'bi-grid-3x3-gap', label: 'Grid Filtering' }
+      ]
+    },
+    {
+      id: 'security',
+      label: 'Security & Auth',
+      icon: 'bi-shield-lock',
+      items: [
+        { path: '/login-collection', icon: 'bi-key-fill', label: 'Login Collection' },
+        { path: '/injection-responses', icon: 'bi-shield-exclamation', label: 'Injection Responses' }
+      ]
+    },
+    {
+      id: 'export',
+      label: 'Export & Docs',
+      icon: 'bi-file-earmark-word',
+      items: [
         { path: '/documentation-export', icon: 'bi-file-earmark-word', label: 'Documentation Export' }
       ]
     },
@@ -45,15 +66,6 @@ const Sidebar = ({ collapsed }) => {
         { path: '/global-headers', icon: 'bi-heading', label: 'Global Headers' },
         { path: '/status-scripts', icon: 'bi-code-slash', label: 'Status Scripts' },
         { path: '/default-api-configs', icon: 'bi-gear-fill', label: 'Default API Configs' },
-        { path: '/injection-responses', icon: 'bi-shield-exclamation', label: 'Injection Responses' }
-      ]
-    },
-    {
-      id: 'advanced',
-      label: 'Advanced',
-      icon: 'bi-sliders',
-      items: [
-        { path: '/grid-filtering', icon: 'bi-grid-3x3-gap', label: 'Grid Filtering' },
         { path: '/filtering-conditions', icon: 'bi-sliders', label: 'Filtering Conditions' }
       ]
     }

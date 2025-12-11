@@ -13,6 +13,8 @@ import DefaultAPIConfigs from './pages/DefaultAPIConfigs';
 import InjectionResponses from './pages/InjectionResponses';
 import GridFiltering from './pages/GridFiltering';
 import FilteringConditions from './pages/FilteringConditions';
+import LoginCollection from './pages/LoginCollection';
+import MergeCollections from './pages/MergeCollections';
 
 function App() {
   return (
@@ -31,6 +33,8 @@ function App() {
           <Route path="/injection-responses" element={<InjectionResponses />} />
           <Route path="/grid-filtering" element={<GridFiltering />} />
           <Route path="/filtering-conditions" element={<FilteringConditions />} />
+          <Route path="/login-collection" element={<LoginCollection />} />
+          <Route path="/merge-collections" element={<MergeCollections />} />
         </Routes>
       </Layout>
     </Router>

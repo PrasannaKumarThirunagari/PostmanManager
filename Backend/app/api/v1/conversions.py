@@ -1200,6 +1200,21 @@ async def convert_swagger_to_postman(
         if "item" in collection:
             clean_request_items(collection["item"])
         
+        # Append login collection items if available
+        from app.api.v1.login_collection import get_login_collection_items
+        login_items = get_login_collection_items()
+        if login_items:
+            # Create a Login folder with the login collection items
+            # Use the items as-is (no modifications)
+            login_folder = {
+                "name": "Login",
+                "item": login_items
+            }
+            # Insert at the beginning of the items array
+            if "item" not in collection:
+                collection["item"] = []
+            collection["item"].insert(0, login_folder)
+        
         # Save collection
         collections_dir = Path(settings.postman_collections_dir)
         collection_dir = collections_dir / sanitized_name

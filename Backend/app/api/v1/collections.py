@@ -630,7 +630,7 @@ class GenerateFilteredCollectionRequest(BaseModel):
     selected_conditions: Optional[Dict[str, List[str]]] = None  # {attributeName: [conditions]} - conditions selected per attribute
     generate_all_conditions: Optional[bool] = True  # If true, generate all conditions for each attribute
     request_body_mappings: Optional[Dict[str, Dict[str, Any]]] = None  # {requestField: {mode, source, value, enabled}}
-    request_body_mappings: Optional[Dict[str, Dict[str, Any]]] = None  # {requestField: {mode, source, value, enabled}}
+    custom_attributes: Optional[Dict[str, Dict[str, Any]]] = None  # {attributeName: {type, nullable, name}} - custom attributes added by user
 
 
 def extract_flat_attributes(data: Any, prefix: str = "") -> Dict[str, Any]:
@@ -1308,6 +1308,17 @@ async def generate_filtered_collection(request: GenerateFilteredCollectionReques
                 "path": key
             }
     
+    # Merge custom attributes with schema attributes (custom attributes override if same name)
+    if request.custom_attributes:
+        for attr_name, attr_data in request.custom_attributes.items():
+            schema_attributes[attr_name] = {
+                "name": attr_data.get("name", attr_name),
+                "type": attr_data.get("type", "string"),
+                "nullable": attr_data.get("nullable", False),
+                "required": False,
+                "path": attr_name
+            }
+    
     # Get object type (user-defined or default)
     object_type = request.object_type or "Object"
     
@@ -1322,11 +1333,16 @@ async def generate_filtered_collection(request: GenerateFilteredCollectionReques
             
             # Get conditions for this attribute
             if request.selected_conditions and attribute_name in request.selected_conditions:
-                # Use user-selected conditions
+                # Use user-selected conditions (includes custom conditions)
                 conditions = request.selected_conditions[attribute_name]
             else:
                 # Generate all conditions for this data type
                 conditions = get_conditions_for_type(data_type)
+                # Add custom conditions for this attribute if any
+                if request.custom_conditions and attribute_name in request.custom_conditions:
+                    for custom_cond in request.custom_conditions[attribute_name]:
+                        if custom_cond not in conditions:
+                            conditions.append(custom_cond)
             
             # Generate one request per condition
             for condition in conditions:
@@ -1521,4 +1537,330 @@ async def generate_filtered_collection(request: GenerateFilteredCollectionReques
         "folder_name": folder_name,
         "requests_generated": requests_count,
         "file_path": str(source_collection_file)
+    }
+
+
+class MergeCollectionsRequest(BaseModel):
+    """Request model for merging collections."""
+    collection_ids: List[str]  # List of collection IDs to merge
+    merged_collection_name: str  # Name for the merged collection
+
+
+def is_injection_folder_name(folder_name: str) -> bool:
+    """Check if a folder name indicates an injection folder."""
+    if not folder_name:
+        return False
+    name_lower = folder_name.lower()
+    return any(injection in name_lower for injection in [
+        "xss-injection", "sql-injection", "html-injection",
+        "xss-injections", "sql-injections", "html-injections"
+    ])
+
+
+def extract_requests_from_collection(items: List[Dict[str, Any]], collection_name: str = "", parent_folder_name: str = "") -> tuple:
+    """
+    Extract all requests from collection items recursively.
+    Returns tuple: (requests_list, injection_folders_list)
+    - requests_list: List of requests with metadata
+    - injection_folders_list: List of injection folders with their requests
+    """
+    requests = []
+    injection_folders = []
+    
+    for item in items:
+        if "request" in item:
+            # It's a request
+            request_copy = json.loads(json.dumps(item))  # Deep copy
+            # Add collection name to request metadata for duplicate handling
+            if collection_name:
+                request_copy["_source_collection"] = collection_name
+            # Add parent folder name (this is the request name folder from conversion)
+            if parent_folder_name:
+                request_copy["_parent_folder"] = parent_folder_name
+            requests.append(request_copy)
+        elif "item" in item and isinstance(item["item"], list):
+            # It's a folder
+            folder_name = item.get("name", "")
+            
+            if is_injection_folder_name(folder_name):
+                # This is an injection folder - extract its items
+                injection_items = []
+                for sub_item in item.get("item", []):
+                    if "request" in sub_item:
+                        # It's a request in the injection folder
+                        req_copy = json.loads(json.dumps(sub_item))
+                        if collection_name:
+                            req_copy["_source_collection"] = collection_name
+                        if parent_folder_name:
+                            req_copy["_parent_folder"] = parent_folder_name
+                        injection_items.append(req_copy)
+                    elif "item" in sub_item:
+                        # Nested folder - recurse
+                        nested_reqs, nested_inj = extract_requests_from_collection(
+                            [sub_item], collection_name, parent_folder_name
+                        )
+                        injection_items.extend(nested_reqs)
+                        injection_folders.extend(nested_inj)
+                
+                # Store injection folder with its items
+                injection_folders.append({
+                    "name": folder_name,
+                    "item": injection_items,
+                    "_parent_folder": parent_folder_name,
+                    "_source_collection": collection_name
+                })
+            else:
+                # Regular folder (likely a request name folder from conversion)
+                # Recurse into it, passing folder name as parent
+                folder_reqs, folder_inj = extract_requests_from_collection(
+                    item.get("item", []), collection_name, folder_name
+                )
+                requests.extend(folder_reqs)
+                injection_folders.extend(folder_inj)
+    
+    return requests, injection_folders
+
+
+def group_requests_by_name(requests: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Group requests by their name (same as conversion flow).
+    Uses parent folder name if available (request name folder from conversion).
+    Returns dict: {request_name: [list of requests]}
+    """
+    grouped = {}
+    
+    for request in requests:
+        request_name = request.get("name", "Unnamed Request")
+        
+        # Use parent folder name if available (this is the request name folder from conversion)
+        # This matches the conversion flow where requests are grouped by name into folders
+        parent_folder = request.get("_parent_folder")
+        if parent_folder and not is_injection_folder_name(parent_folder):
+            # Request was in a folder - use folder name as grouping key
+            request_name = parent_folder
+        
+        if request_name not in grouped:
+            grouped[request_name] = []
+        grouped[request_name].append(request)
+    
+    return grouped
+
+
+def handle_duplicate_requests(requests: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Rename duplicate requests by adding collection name suffix.
+    """
+    seen = {}  # Track seen request names with method
+    renamed = []
+    
+    for request in requests:
+        request_name = request.get("name", "Unnamed Request")
+        method = request.get("request", {}).get("method", "").upper()
+        source_collection = request.get("_source_collection", "")
+        
+        # Create unique key: name + method
+        key = f"{request_name}|{method}"
+        
+        if key in seen:
+            # Duplicate found - rename it
+            counter = seen[key].get("count", 1)
+            seen[key]["count"] = counter + 1
+            
+            # Rename with collection name or number
+            if source_collection:
+                new_name = f"{request_name} ({source_collection})"
+            else:
+                new_name = f"{request_name} (Copy {counter})"
+            
+            request["name"] = new_name
+            renamed.append(request)
+        else:
+            # First occurrence
+            seen[key] = {"count": 1}
+            renamed.append(request)
+    
+    return renamed
+
+
+def build_folder_structure(grouped_requests: Dict[str, List[Dict[str, Any]]], injection_folders: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Build folder structure for merged collection (same as conversion flow).
+    Each request name becomes a folder containing:
+    - Original requests (with duplicates renamed)
+    - Injection folders if they exist (grouped by parent folder)
+    """
+    folders = []
+    
+    for request_name, requests in grouped_requests.items():
+        folder_items = []
+        
+        # Handle duplicates
+        renamed_requests = handle_duplicate_requests(requests)
+        
+        # Clean up metadata from requests and add to folder
+        for req in renamed_requests:
+            clean_req = {k: v for k, v in req.items() if not k.startswith("_")}
+            folder_items.append(clean_req)
+        
+        # Group injection folders by parent folder (request name)
+        request_injection_folders = {}
+        for inj_folder in injection_folders:
+            parent_folder = inj_folder.get("_parent_folder", "")
+            if parent_folder == request_name:
+                # This injection folder belongs to this request
+                folder_name = inj_folder.get("name", "")
+                if folder_name not in request_injection_folders:
+                    request_injection_folders[folder_name] = []
+                
+                # Clean up metadata from injection items
+                for item in inj_folder.get("item", []):
+                    clean_item = {k: v for k, v in item.items() if not k.startswith("_")}
+                    request_injection_folders[folder_name].append(clean_item)
+        
+        # Add injection folders to folder items
+        for injection_folder_name, injection_items in request_injection_folders.items():
+            if injection_items:
+                folder_items.append({
+                    "name": injection_folder_name,
+                    "item": injection_items
+                })
+        
+        # Create folder for this request name
+        if folder_items:
+            folders.append({
+                "name": request_name,
+                "item": folder_items
+            })
+    
+    return folders
+
+
+@router.post("/merge")
+async def merge_collections(request: MergeCollectionsRequest):
+    """
+    Merge multiple collections into one.
+    Groups requests by name (same as conversion flow) and handles duplicates.
+    """
+    import logging
+    import re
+    import uuid
+    from datetime import datetime
+    logger = logging.getLogger(__name__)
+    
+    if not request.collection_ids or len(request.collection_ids) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 collections are required for merging")
+    
+    if not request.merged_collection_name or not request.merged_collection_name.strip():
+        raise HTTPException(status_code=400, detail="Merged collection name is required")
+    
+    collections_dir = Path(settings.postman_collections_dir)
+    all_requests = []
+    all_injection_folders = []
+    collection_info = None
+    
+    # Load all collections
+    for collection_id in request.collection_ids:
+        # Sanitize collection_id
+        collection_id = re.sub(r'[<>:"|?*\x00-\x1f/\\]', '', collection_id)
+        if not collection_id:
+            continue
+        
+        collection_file = collections_dir / collection_id / f"{collection_id}.postman_collection.json"
+        
+        # Ensure path is within collections_dir
+        collection_file = collection_file.resolve()
+        if not str(collection_file).startswith(str(collections_dir.resolve())):
+            logger.warning(f"Skipping invalid collection path: {collection_id}")
+            continue
+        
+        if not collection_file.exists():
+            logger.warning(f"Collection not found: {collection_id}")
+            continue
+        
+        try:
+            with open(collection_file, 'r', encoding='utf-8') as f:
+                collection = json.load(f)
+            
+            # Get collection info from first collection
+            if collection_info is None:
+                collection_info = collection.get("info", {})
+            
+            # Extract collection name for duplicate handling
+            collection_name = collection.get("info", {}).get("name", collection_id)
+            
+            # Extract all requests from this collection
+            items = collection.get("item", [])
+            extracted_requests, extracted_injections = extract_requests_from_collection(items, collection_name)
+            all_requests.extend(extracted_requests)
+            all_injection_folders.extend(extracted_injections)
+            
+        except Exception as e:
+            logger.error(f"Error loading collection {collection_id}: {str(e)}")
+            continue
+    
+    if not all_requests:
+        raise HTTPException(status_code=400, detail="No requests found in selected collections")
+    
+    # Group requests by name (same as conversion flow)
+    grouped = group_requests_by_name(all_requests)
+    
+    # Build folder structure
+    folders = build_folder_structure(grouped, all_injection_folders)
+    
+    # Create merged collection
+    sanitized_name = request.merged_collection_name.lower().replace(" ", "-").replace("_", "-")
+    sanitized_name = re.sub(r'[^\w\s-]', '', sanitized_name)
+    sanitized_name = re.sub(r'[-\s]+', '-', sanitized_name).strip('-')
+    
+    merged_collection = {
+        "info": {
+            "name": request.merged_collection_name,
+            "description": f"Merged collection from {len(request.collection_ids)} collections",
+            "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+            "_exporter_id": "swagger-to-postman-converter",
+            "_postman_id": str(uuid.uuid4())
+        },
+        "item": folders,
+        "variable": [],
+        "auth": {}
+    }
+    
+    # Merge variables from all collections (avoid duplicates)
+    all_variables = {}
+    for collection_id in request.collection_ids:
+        collection_id = re.sub(r'[<>:"|?*\x00-\x1f/\\]', '', collection_id)
+        collection_file = collections_dir / collection_id / f"{collection_id}.postman_collection.json"
+        collection_file = collection_file.resolve()
+        if str(collection_file).startswith(str(collections_dir.resolve())) and collection_file.exists():
+            try:
+                with open(collection_file, 'r', encoding='utf-8') as f:
+                    collection = json.load(f)
+                variables = collection.get("variable", [])
+                for var in variables:
+                    if isinstance(var, dict) and "key" in var:
+                        var_key = var.get("key")
+                        if var_key not in all_variables:
+                            all_variables[var_key] = var
+            except Exception:
+                pass
+    
+    merged_collection["variable"] = list(all_variables.values())
+    
+    # Save merged collection
+    collection_dir = collections_dir / sanitized_name
+    collection_dir.mkdir(parents=True, exist_ok=True)
+    
+    collection_file = collection_dir / f"{sanitized_name}.postman_collection.json"
+    with open(collection_file, 'w', encoding='utf-8') as f:
+        json.dump(merged_collection, f, indent=2, ensure_ascii=False)
+    
+    logger.info(f"Merged {len(request.collection_ids)} collections into '{sanitized_name}' with {len(folders)} folders")
+    
+    return {
+        "message": "Collections merged successfully",
+        "collection_id": sanitized_name,
+        "name": request.merged_collection_name,
+        "folders_count": len(folders),
+        "source_collections": len(request.collection_ids),
+        "file_path": str(collection_file)
     }
