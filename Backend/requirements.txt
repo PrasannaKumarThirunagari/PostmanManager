@@ -31,3 +31,6 @@ python-dotenv>=1.0.1
 
 # Word Document Generation
 python-docx>=1.1.0
+
+# OpenAI API
+openai>=1.0.0

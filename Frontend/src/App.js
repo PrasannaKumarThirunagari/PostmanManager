@@ -15,6 +15,7 @@ import GridFiltering from './pages/GridFiltering';
 import FilteringConditions from './pages/FilteringConditions';
 import LoginCollection from './pages/LoginCollection';
 import MergeCollections from './pages/MergeCollections';
+import AIPostmanEditor from './pages/AIPostmanEditor';
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
           <Route path="/filtering-conditions" element={<FilteringConditions />} />
           <Route path="/login-collection" element={<LoginCollection />} />
           <Route path="/merge-collections" element={<MergeCollections />} />
+          <Route path="/ai-postman-editor" element={<AIPostmanEditor />} />
         </Routes>
       </Layout>
     </Router>

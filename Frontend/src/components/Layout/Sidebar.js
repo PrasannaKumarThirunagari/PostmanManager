@@ -38,7 +38,8 @@ const Sidebar = ({ collapsed }) => {
         { path: '/postman', icon: 'bi-collection', label: 'Postman Manager' },
         { path: '/collection-editor', icon: 'bi-pencil-square', label: 'Collection Editor' },
         { path: '/merge-collections', icon: 'bi-diagram-3', label: 'Merge Collections' },
-        { path: '/grid-filtering', icon: 'bi-grid-3x3-gap', label: 'Grid Filtering' }
+        { path: '/grid-filtering', icon: 'bi-grid-3x3-gap', label: 'Grid Filtering' },
+        { path: '/ai-postman-editor', icon: 'bi-robot', label: 'AI Postman Editor' }
       ]
     },
     {

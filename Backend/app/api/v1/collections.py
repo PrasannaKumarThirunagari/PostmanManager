@@ -1864,3 +1864,344 @@ async def merge_collections(request: MergeCollectionsRequest):
         "source_collections": len(request.collection_ids),
         "file_path": str(collection_file)
     }
+
+
+class AIGenerateRequest(BaseModel):
+    """Request model for AI-powered request generation."""
+    collection_id: str
+    request_ids: List[str]  # List of request identifiers (name + method or path)
+    prompt: str
+    openai_api_key: str
+
+
+def flatten_requests_for_selection(items: List[Dict[str, Any]], path: str = "") -> List[Dict[str, Any]]:
+    """
+    Flatten collection items to get all requests with their paths for selection.
+    Returns list of requests with metadata including path for identification.
+    """
+    requests = []
+    
+    for item in items:
+        if "request" in item:
+            # It's a request
+            request_name = item.get("name", "")
+            request_method = item.get("request", {}).get("method", "").upper()
+            # Create unique identifier: path + name + method
+            request_id = f"{path}::{request_name}::{request_method}" if path else f"{request_name}::{request_method}"
+            requests.append({
+                "id": request_id,
+                "name": request_name,
+                "method": request_method,
+                "path": path,
+                "request": item
+            })
+        elif "item" in item and isinstance(item["item"], list):
+            # It's a folder - recurse
+            folder_name = item.get("name", "")
+            new_path = f"{path}/{folder_name}" if path else folder_name
+            nested_requests = flatten_requests_for_selection(item["item"], new_path)
+            requests.extend(nested_requests)
+    
+    return requests
+
+
+def find_request_by_id(items: List[Dict[str, Any]], target_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Find a request in collection by its ID (path::name::method format).
+    """
+    flattened = flatten_requests_for_selection(items)
+    for req in flattened:
+        if req["id"] == target_id:
+            return req["request"]
+    return None
+
+
+@router.post("/ai-generate")
+async def ai_generate_requests(request: AIGenerateRequest):
+    """
+    Use OpenAI to modify Postman requests based on a prompt.
+    Returns modified requests that can be saved back to the collection.
+    """
+    import logging
+    import re
+    logger = logging.getLogger(__name__)
+    
+    # Sanitize collection_id
+    collection_id = re.sub(r'[<>:"|?*\x00-\x1f/\\]', '', request.collection_id)
+    if not collection_id:
+        raise HTTPException(status_code=400, detail="Invalid collection ID")
+    
+    collections_dir = Path(settings.postman_collections_dir)
+    collection_file = collections_dir / collection_id / f"{collection_id}.postman_collection.json"
+    
+    # Ensure path is within collections_dir
+    collection_file = collection_file.resolve()
+    if not str(collection_file).startswith(str(collections_dir.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid collection path")
+    
+    if not collection_file.exists():
+        raise HTTPException(status_code=404, detail="Collection not found")
+    
+    # Load collection
+    with open(collection_file, 'r', encoding='utf-8') as f:
+        collection = json.load(f)
+    
+    # Find selected requests
+    all_items = collection.get("item", [])
+    selected_requests = []
+    
+    for request_id in request.request_ids:
+        found_request = find_request_by_id(all_items, request_id)
+        if found_request:
+            selected_requests.append(found_request)
+        else:
+            logger.warning(f"Request not found: {request_id}")
+    
+    if not selected_requests:
+        raise HTTPException(status_code=400, detail="No valid requests found")
+    
+    # Prepare prompt for OpenAI
+    requests_json = json.dumps(selected_requests, indent=2)
+    system_prompt = """You are an expert API developer. Your task is to modify Postman collection requests based on user instructions.
+
+The user will provide:
+1. A list of Postman requests in JSON format
+2. Instructions on what changes to make
+
+You must return ONLY a valid JSON array of the modified requests. The response must be a JSON array (starting with [ and ending with ]), maintaining the exact same structure as the input but with the requested modifications applied.
+Each request must maintain its Postman collection format with all required fields (name, request, etc.).
+
+Important:
+- Return ONLY the JSON array, no explanations, no markdown code blocks, no text before or after
+- The response must start with [ and end with ]
+- Preserve all fields not mentioned in the instructions
+- Ensure the JSON is valid and properly formatted
+- Keep the same request structure (method, url, headers, body, etc.)
+- Return the same number of requests as provided in the input
+"""
+    
+    user_prompt = f"""Here are the Postman requests to modify:
+
+{requests_json}
+
+User instructions:
+{request.prompt}
+
+Return the modified requests as a JSON array (starting with [ and ending with ]). Do not include any text before or after the array."""
+    
+    # Call OpenAI API
+    try:
+        from openai import OpenAI
+        
+        client = OpenAI(api_key=request.openai_api_key)
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # Using gpt-4o-mini for cost efficiency, can be changed to gpt-4 if needed
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3  # Lower temperature for more consistent results
+        )
+        
+        # Extract response content
+        response_content = response.choices[0].message.content.strip()
+        
+            # Try to parse as JSON - handle markdown code blocks if present
+        try:
+            # Remove markdown code blocks if present
+            if response_content.startswith("```"):
+                # Extract JSON from code block
+                lines = response_content.split("\n")
+                # Find the JSON part (skip first line with ```json or ```)
+                json_start = 1
+                json_end = len(lines) - 1
+                if lines[json_end].strip() == "```":
+                    json_end -= 1
+                response_content = "\n".join(lines[json_start:json_end+1])
+            
+            # Try to find JSON array in the response (in case there's extra text)
+            # Look for the first [ and last ]
+            first_bracket = response_content.find('[')
+            last_bracket = response_content.rfind(']')
+            if first_bracket != -1 and last_bracket != -1 and last_bracket > first_bracket:
+                response_content = response_content[first_bracket:last_bracket+1]
+            
+            # Try to parse as JSON
+            parsed_response = json.loads(response_content)
+            
+            # If it's wrapped in an object, try to find the array
+            if isinstance(parsed_response, dict):
+                # Look for common keys that might contain the array
+                for key in ["requests", "items", "data", "result", "modified_requests"]:
+                    if key in parsed_response and isinstance(parsed_response[key], list):
+                        modified_requests = parsed_response[key]
+                        break
+                else:
+                    # If no key found, try to extract array from values
+                    array_values = [v for v in parsed_response.values() if isinstance(v, list)]
+                    if array_values:
+                        modified_requests = array_values[0]
+                    else:
+                        raise ValueError("Could not find array in response")
+            elif isinstance(parsed_response, list):
+                modified_requests = parsed_response
+            else:
+                # Single object - wrap in array
+                modified_requests = [parsed_response]
+            
+            # Ensure it's a list
+            if not isinstance(modified_requests, list):
+                modified_requests = [modified_requests]
+            
+            # Validate that we have the same number of requests
+            if len(modified_requests) != len(selected_requests):
+                logger.warning(f"Number of modified requests ({len(modified_requests)}) doesn't match selected requests ({len(selected_requests)})")
+            
+            # Map modified requests back to their IDs
+            result = []
+            for i, request_id in enumerate(request.request_ids):
+                if i < len(modified_requests):
+                    result.append({
+                        "request_id": request_id,
+                        "modified_request": modified_requests[i]
+                    })
+                else:
+                    # If we don't have enough modified requests, use original
+                    found_request = find_request_by_id(all_items, request_id)
+                    if found_request:
+                        result.append({
+                            "request_id": request_id,
+                            "modified_request": found_request
+                        })
+            
+            return {
+                "message": "Requests generated successfully",
+                "collection_id": collection_id,
+                "modified_requests": result,
+                "raw_response": response_content  # Include for debugging
+            }
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse OpenAI response as JSON: {str(e)}")
+            logger.error(f"Response content: {response_content[:500]}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"OpenAI returned invalid JSON. Response: {response_content[:200]}"
+            )
+    
+    except Exception as e:
+        logger.error(f"OpenAI API error: {str(e)}", exc_info=True)
+        if "Invalid API key" in str(e) or "401" in str(e):
+            raise HTTPException(status_code=401, detail="Invalid OpenAI API key")
+        elif "429" in str(e) or "rate limit" in str(e).lower():
+            raise HTTPException(status_code=429, detail="OpenAI API rate limit exceeded")
+        else:
+            raise HTTPException(status_code=500, detail=f"OpenAI API error: {str(e)}")
+
+
+class AISaveCollectionRequest(BaseModel):
+    """Request model for saving AI-generated requests back to collection."""
+    collection_id: str
+    modified_requests: List[Dict[str, Any]]  # List of {request_id, modified_request}
+
+
+@router.post("/ai-save")
+async def ai_save_collection(request: AISaveCollectionRequest):
+    """
+    Save AI-generated requests back to the Postman collection.
+    Updates the collection with modified requests.
+    """
+    import logging
+    import re
+    import copy
+    logger = logging.getLogger(__name__)
+    
+    # Sanitize collection_id
+    collection_id = re.sub(r'[<>:"|?*\x00-\x1f/\\]', '', request.collection_id)
+    if not collection_id:
+        raise HTTPException(status_code=400, detail="Invalid collection ID")
+    
+    collections_dir = Path(settings.postman_collections_dir)
+    collection_file = collections_dir / collection_id / f"{collection_id}.postman_collection.json"
+    
+    # Ensure path is within collections_dir
+    collection_file = collection_file.resolve()
+    if not str(collection_file).startswith(str(collections_dir.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid collection path")
+    
+    if not collection_file.exists():
+        raise HTTPException(status_code=404, detail="Collection not found")
+    
+    # Load collection
+    with open(collection_file, 'r', encoding='utf-8') as f:
+        collection = json.load(f)
+    
+    # Create a mapping of request_id to modified request
+    modified_map = {}
+    for item in request.modified_requests:
+        request_id = item.get("request_id")
+        modified_request = item.get("modified_request")
+        if request_id and modified_request:
+            modified_map[request_id] = modified_request
+    
+    # Function to update requests in the collection structure
+    def update_requests_in_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Recursively update requests in collection items."""
+        updated_items = []
+        
+        for item in items:
+            if "request" in item:
+                # It's a request - check if it needs to be updated
+                request_name = item.get("name", "")
+                request_method = item.get("request", {}).get("method", "").upper()
+                
+                # Try to find matching request_id
+                # Check all possible IDs (with and without path)
+                for request_id, modified_request in modified_map.items():
+                    # Parse request_id: path::name::method or name::method
+                    parts = request_id.split("::")
+                    if len(parts) >= 2:
+                        id_name = parts[-2] if len(parts) > 2 else parts[0]
+                        id_method = parts[-1].upper()
+                        
+                        if request_name == id_name and request_method == id_method:
+                            # Found match - replace with modified request
+                            updated_items.append(modified_request)
+                            break
+                else:
+                    # No match found - keep original
+                    updated_items.append(item)
+            
+            elif "item" in item and isinstance(item["item"], list):
+                # It's a folder - recurse
+                updated_folder = {
+                    **item,
+                    "item": update_requests_in_items(item["item"])
+                }
+                updated_items.append(updated_folder)
+            else:
+                # Unknown type - keep as-is
+                updated_items.append(item)
+        
+        return updated_items
+    
+    # Update collection items
+    collection["item"] = update_requests_in_items(collection.get("item", []))
+    
+    # Save updated collection
+    try:
+        with open(collection_file, 'w', encoding='utf-8') as f:
+            json.dump(collection, f, indent=2, ensure_ascii=False)
+        
+        logger.info(f"Saved AI-generated requests to collection '{collection_id}'")
+        
+        return {
+            "message": "Collection saved successfully",
+            "collection_id": collection_id,
+            "requests_updated": len(modified_map)
+        }
+    
+    except Exception as e:
+        logger.error(f"Error saving collection: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error saving collection: {str(e)}")
