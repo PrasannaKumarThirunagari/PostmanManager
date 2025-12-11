@@ -41,6 +41,88 @@ def json_serialize(obj):
     return obj
 
 
+def extract_nested_string_fields(data: Any, prefix: str = "", max_depth: int = 10, current_depth: int = 0) -> List[str]:
+    """
+    Extract all string field paths from nested JSON structure using dot notation.
+    Returns list of field paths like: ['pageIndex', 'columnList.attributeName', 'columnList.attributeValue']
+    
+    Args:
+        data: The JSON data (dict, list, or primitive)
+        prefix: Current path prefix (for nested objects)
+        max_depth: Maximum nesting depth to prevent infinite recursion
+        current_depth: Current nesting depth
+    
+    Returns:
+        List of field paths (strings)
+    """
+    if current_depth >= max_depth:
+        return []
+    
+    string_fields = []
+    
+    if isinstance(data, dict):
+        for key, value in data.items():
+            full_path = f"{prefix}.{key}" if prefix else key
+            
+            if isinstance(value, dict):
+                # Nested object - recurse
+                nested_fields = extract_nested_string_fields(value, full_path, max_depth, current_depth + 1)
+                string_fields.extend(nested_fields)
+            elif isinstance(value, list) and len(value) > 0:
+                # Array - extract from first element if it's an object
+                if isinstance(value[0], dict):
+                    nested_fields = extract_nested_string_fields(value[0], full_path, max_depth, current_depth + 1)
+                    string_fields.extend(nested_fields)
+                elif SecurityTestService.is_string_field(value[0]):
+                    # Array of strings - include the array field itself
+                    string_fields.append(full_path)
+            elif SecurityTestService.is_string_field(value):
+                # String field - add to list
+                string_fields.append(full_path)
+    elif isinstance(data, list) and len(data) > 0:
+        # If it's an array, extract from first object
+        if isinstance(data[0], dict):
+            return extract_nested_string_fields(data[0], prefix, max_depth, current_depth)
+        elif SecurityTestService.is_string_field(data[0]):
+            if prefix:
+                string_fields.append(prefix)
+    
+    return string_fields
+
+
+def set_nested_value(data: Dict[str, Any], path: str, value: Any) -> Dict[str, Any]:
+    """
+    Set a value in a nested dictionary using dot notation path.
+    
+    Args:
+        data: The dictionary to modify
+        path: Dot notation path (e.g., 'columnList.attributeName')
+        value: Value to set
+    
+    Returns:
+        Modified dictionary
+    """
+    if not path or not isinstance(data, dict):
+        return data
+    
+    parts = path.split('.')
+    current = data
+    
+    # Navigate to the parent of the target field
+    for part in parts[:-1]:
+        if part not in current:
+            current[part] = {}
+        elif not isinstance(current[part], dict):
+            # If it's not a dict, replace it with a dict
+            current[part] = {}
+        current = current[part]
+    
+    # Set the final value
+    current[parts[-1]] = value
+    
+    return data
+
+
 def resolve_schema_reference(swagger_data: Dict[str, Any], ref: str) -> Dict[str, Any]:
     """Resolve $ref schema reference."""
     if not ref.startswith('#/components/schemas/'):
@@ -734,7 +816,7 @@ async def convert_swagger_to_postman(
                     
                     folder_items.append(original_request)
                     
-                    # Generate XSS variants - one request per field
+                    # Generate XSS variants - one request per field (including nested fields)
                     if request.include_xss:
                         xss_folder = {
                             "name": "XSS-Injections",
@@ -744,19 +826,17 @@ async def convert_swagger_to_postman(
                             try:
                                 body_data = json.loads(body.get('raw', '{}'))
                                 if isinstance(body_data, dict):
-                                    # Get all string fields
-                                    string_fields = [key for key, value in body_data.items() 
-                                                   if SecurityTestService.is_string_field(value)]
+                                    # Get all string fields including nested ones (with dot notation)
+                                    string_fields = extract_nested_string_fields(body_data)
                                     
                                     # Generate one request per field (one payload per field)
-                                    for field_name in string_fields:
+                                    for field_path in string_fields:
                                         # Use first payload for each field
                                         payload = SecurityTestService.XSS_PAYLOADS[0] if SecurityTestService.XSS_PAYLOADS else "<script>alert('XSS')</script>"
                                         # Create a copy of body_data
                                         variant_body_data = json.loads(body.get('raw', '{}'))
-                                        # Inject payload only into this specific field
-                                        if field_name in variant_body_data:
-                                            variant_body_data[field_name] = payload
+                                        # Inject payload into the specific field (handles nested paths)
+                                        variant_body_data = set_nested_value(variant_body_data, field_path, payload)
                                         
                                         # Serialize datetime objects
                                         variant_body_data = json_serialize(variant_body_data)
@@ -800,8 +880,10 @@ async def convert_swagger_to_postman(
                                             }
                                             variant_responses.append(injection_400_response)
                                         
+                                        # Use field_path for naming (handles nested fields like "columnList.attributeName")
+                                        display_name = field_path.replace('.', '-')  # Replace dots with dashes for readability
                                         variant_request = {
-                                            "name": f"{request_name} XSS-Injection {field_name}",
+                                            "name": f"{request_name} XSS-Injection {display_name}",
                                             "request": {
                                                 "method": method.upper(),
                                                 "header": headers,
@@ -863,7 +945,7 @@ async def convert_swagger_to_postman(
                                 pass
                         folder_items.append(xss_folder)
                     
-                    # Generate SQL variants - one request per field
+                    # Generate SQL variants - one request per field (including nested fields)
                     if request.include_sql:
                         sql_folder = {
                             "name": "SQL-Injections",
@@ -873,19 +955,17 @@ async def convert_swagger_to_postman(
                             try:
                                 body_data = json.loads(body.get('raw', '{}'))
                                 if isinstance(body_data, dict):
-                                    # Get all string fields
-                                    string_fields = [key for key, value in body_data.items() 
-                                                   if SecurityTestService.is_string_field(value)]
+                                    # Get all string fields including nested ones (with dot notation)
+                                    string_fields = extract_nested_string_fields(body_data)
                                     
                                     # Generate one request per field (one payload per field)
-                                    for field_name in string_fields:
+                                    for field_path in string_fields:
                                         # Use first payload for each field
                                         payload = SecurityTestService.SQL_PAYLOADS[0] if SecurityTestService.SQL_PAYLOADS else "' OR '1'='1"
                                         # Create a copy of body_data
                                         variant_body_data = json.loads(body.get('raw', '{}'))
-                                        # Inject payload only into this specific field
-                                        if field_name in variant_body_data:
-                                            variant_body_data[field_name] = payload
+                                        # Inject payload into the specific field (handles nested paths)
+                                        variant_body_data = set_nested_value(variant_body_data, field_path, payload)
                                         
                                         # Serialize datetime objects
                                         variant_body_data = json_serialize(variant_body_data)
@@ -929,8 +1009,10 @@ async def convert_swagger_to_postman(
                                             }
                                             variant_responses.append(injection_400_response)
                                         
+                                        # Use field_path for naming (handles nested fields like "columnList.attributeName")
+                                        display_name = field_path.replace('.', '-')  # Replace dots with dashes for readability
                                         variant_request = {
-                                            "name": f"{request_name} SQL-Injection {field_name}",
+                                            "name": f"{request_name} SQL-Injection {display_name}",
                                             "request": {
                                                 "method": method.upper(),
                                                 "header": headers,
@@ -993,6 +1075,7 @@ async def convert_swagger_to_postman(
                         folder_items.append(sql_folder)
                     
                     # Generate HTML variants - one request per field
+                    # Generate HTML variants - one request per field (including nested fields)
                     if request.include_html:
                         html_folder = {
                             "name": "HTML-Injections",
@@ -1002,19 +1085,17 @@ async def convert_swagger_to_postman(
                             try:
                                 body_data = json.loads(body.get('raw', '{}'))
                                 if isinstance(body_data, dict):
-                                    # Get all string fields
-                                    string_fields = [key for key, value in body_data.items() 
-                                                   if SecurityTestService.is_string_field(value)]
+                                    # Get all string fields including nested ones (with dot notation)
+                                    string_fields = extract_nested_string_fields(body_data)
                                     
                                     # Generate one request per field (one payload per field)
-                                    for field_name in string_fields:
+                                    for field_path in string_fields:
                                         # Use first payload for each field
                                         payload = SecurityTestService.HTML_PAYLOADS[0] if SecurityTestService.HTML_PAYLOADS else "<h1>Test</h1>"
                                         # Create a copy of body_data
                                         variant_body_data = json.loads(body.get('raw', '{}'))
-                                        # Inject payload only into this specific field
-                                        if field_name in variant_body_data:
-                                            variant_body_data[field_name] = payload
+                                        # Inject payload into the specific field (handles nested paths)
+                                        variant_body_data = set_nested_value(variant_body_data, field_path, payload)
                                         
                                         # Serialize datetime objects
                                         variant_body_data = json_serialize(variant_body_data)
@@ -1058,8 +1139,10 @@ async def convert_swagger_to_postman(
                                             }
                                             variant_responses.append(injection_400_response)
                                         
+                                        # Use field_path for naming (handles nested fields like "columnList.attributeName")
+                                        display_name = field_path.replace('.', '-')  # Replace dots with dashes for readability
                                         variant_request = {
-                                            "name": f"{request_name} HTML-Injection {field_name}",
+                                            "name": f"{request_name} HTML-Injection {display_name}",
                                             "request": {
                                                 "method": method.upper(),
                                                 "header": headers,

@@ -1220,10 +1220,33 @@ def clone_request_with_filters(
         
         try:
             body_data = json.loads(body.get("raw", "{}"))
-            body_data[condition.attribute] = condition.value
+            # Handle nested attributes using dot notation
+            if "." in condition.attribute:
+                parts = condition.attribute.split(".")
+                current = body_data
+                for part in parts[:-1]:
+                    if part not in current:
+                        current[part] = {}
+                    elif not isinstance(current[part], dict):
+                        current[part] = {}
+                    current = current[part]
+                current[parts[-1]] = condition.value
+            else:
+                body_data[condition.attribute] = condition.value
             body["raw"] = json.dumps(body_data, indent=2)
         except (json.JSONDecodeError, TypeError):
-            body_data = {condition.attribute: condition.value}
+            # Fallback: create new body with the attribute
+            if "." in condition.attribute:
+                # Handle nested path
+                parts = condition.attribute.split(".")
+                body_data = {}
+                current = body_data
+                for part in parts[:-1]:
+                    current[part] = {}
+                    current = current[part]
+                current[parts[-1]] = condition.value
+            else:
+                body_data = {condition.attribute: condition.value}
             body["raw"] = json.dumps(body_data, indent=2)
     
     return cloned
