@@ -236,9 +236,13 @@ const GridFiltering = () => {
             const nested = extractRequestBodyAttributes(value, fullKey);
             attributes.push(...nested);
           } else if (Array.isArray(value)) {
-            // Array - extract from first element if it's an object, but DON'T include array name
+            // Array - extract from first element if it's an object
+            // For arrays like columnList, we want to extract inner attributes (attrFilter, attrName, attGet)
+            // but NOT include the array name itself (columnList)
             if (value.length > 0 && typeof value[0] === 'object') {
-              const nested = extractRequestBodyAttributes(value[0], prefix); // Keep prefix, don't add array name
+              // Extract from first element, but don't add the array name to the path
+              // This way we get "attrFilter", "attrName", "attGet" instead of "columnList.attrFilter"
+              const nested = extractRequestBodyAttributes(value[0], prefix); // Use prefix, not fullKey
               attributes.push(...nested);
             }
             // Skip array of primitives (don't include array name)
@@ -744,166 +748,156 @@ const GridFiltering = () => {
           </div>
 
           {/* Section 3: Mapping Area - Field Mapping Configuration */}
-          {responseBody && Object.keys(responseAttributes).length > 0 && (
-            <>
-              {/* Request Body Attribute Mapping */}
-              {requestBody && requestBodyAttributes.length > 0 && (
-                <div className="card-modern mb-6">
-                  <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-4">
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                      <i className="bi bi-3-circle"></i>
-                      Section 3: Request Body Attribute Mapping
-                    </h2>
-                  </div>
-                  <div className="p-6">
-                    <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg mb-4">
-                      <strong>Map Request Body Attributes:</strong> Configure how each request body attribute should be populated in generated requests.
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-slate-200">
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '18%' }}>Request Field</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '15%' }}>Mapping Mode</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '27%' }}>Source/Value</th>
-                            <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '10%' }}>Enabled</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '20%' }}>Description</th>
-                            <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '10%' }}>Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {requestBodyAttributes.map((attr) => {
-                            const mapping = requestBodyMappings[attr] || { mode: 'none', source: '', value: '', enabled: true };
-                            return (
-                              <tr key={attr} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-4 py-4 font-semibold text-slate-900">{attr}</td>
-                                <td className="px-4 py-4">
-                                  <select
-                                    className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    value={mapping.mode}
-                                    onChange={(e) => {
-                                      setRequestBodyMappings({
-                                        ...requestBodyMappings,
-                                        [attr]: {
-                                          ...mapping,
-                                          mode: e.target.value,
-                                          source: '',
-                                          value: ''
-                                        }
-                                      });
-                                    }}
-                                  >
-                                    <option value="none">No Mapping</option>
-                                    <option value="response">From Response</option>
-                                    <option value="manual">Manual Value</option>
-                                    <option value="special">Special Value</option>
-                                  </select>
-                                </td>
-                                <td className="px-4 py-4">
-                                  {mapping.mode === 'response' && (
-                                    <select
-                                      className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                      value={mapping.source}
-                                      onChange={(e) => {
-                                        setRequestBodyMappings({
-                                          ...requestBodyMappings,
-                                          [attr]: { ...mapping, source: e.target.value }
-                                        });
-                                      }}
-                                    >
-                                      <option value="">-- Select Response Attribute --</option>
-                                      {Object.keys(responseAttributes).map(respAttr => (
-                                        <option key={respAttr} value={respAttr}>{respAttr}</option>
-                                      ))}
-                                    </select>
-                                  )}
-                                  {mapping.mode === 'manual' && (
-                                    <input
-                                      type="text"
-                                      placeholder="Enter value"
-                                      value={mapping.value}
-                                      onChange={(e) => {
-                                        setRequestBodyMappings({
-                                          ...requestBodyMappings,
-                                          [attr]: { ...mapping, value: e.target.value }
-                                        });
-                                      }}
-                                      className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    />
-                                  )}
-                                  {mapping.mode === 'special' && (
-                                    <select
-                                      className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                      value={mapping.source}
-                                      onChange={(e) => {
-                                        setRequestBodyMappings({
-                                          ...requestBodyMappings,
-                                          [attr]: { ...mapping, source: e.target.value }
-                                        });
-                                      }}
-                                    >
-                                      <option value="">-- Select Special Value --</option>
-                                      <option value="attributeName">Attribute Name (from response)</option>
-                                      <option value="objectType">Object Type (user input)</option>
-                                      <option value="dataType">Data Type (from response)</option>
-                                      <option value="condition">Condition (EQ, NEQ, etc.)</option>
-                                      <option value="attributeValue">Attribute Value (template)</option>
-                                    </select>
-                                  )}
-                                  {mapping.mode === 'none' && (
-                                    <span className="text-slate-400">-</span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-4 text-center">
-                                  <input
-                                    type="checkbox"
-                                    checked={mapping.enabled}
-                                    onChange={(e) => {
-                                      setRequestBodyMappings({
-                                        ...requestBodyMappings,
-                                        [attr]: { ...mapping, enabled: e.target.checked }
-                                      });
-                                    }}
-                                    className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
-                                  />
-                                </td>
-                                <td className="px-4 py-4">
-                                  <span className="text-sm text-slate-500">
-                                    {mapping.mode === 'response' && 'Maps from response attribute'}
-                                    {mapping.mode === 'manual' && 'Uses fixed manual value'}
-                                    {mapping.mode === 'special' && 'Uses special system value'}
-                                    {mapping.mode === 'none' && 'Not mapped - will use original value'}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-4 text-center">
-                                  <button
-                                    onClick={() => {
-                                      // Remove attribute from list
-                                      const updatedAttributes = requestBodyAttributes.filter(a => a !== attr);
-                                      setRequestBodyAttributes(updatedAttributes);
-                                      
-                                      // Remove mapping for this attribute
-                                      const updatedMappings = { ...requestBodyMappings };
-                                      delete updatedMappings[attr];
-                                      setRequestBodyMappings(updatedMappings);
-                                    }}
-                                    className="inline-flex items-center justify-center w-8 h-8 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
-                                    title="Remove this attribute"
-                                  >
-                                    <i className="bi bi-trash text-lg"></i>
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+          {/* Show Request Body Attribute Mapping if request body has attributes */}
+          {requestBody && requestBodyAttributes.length > 0 && (
+            <div className="card-modern mb-6">
+              <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-4">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <i className="bi bi-3-circle"></i>
+                  Section 3: Request Body Attribute Mapping
+                </h2>
+              </div>
+              <div className="p-6">
+                <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg mb-4">
+                  <strong>Map Request Body Attributes:</strong> Configure how each request body attribute should be populated in generated requests.
                 </div>
-              )}
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-slate-200">
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 bg-slate-50">Attribute</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 bg-slate-50">Mode</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 bg-slate-50">Source/Value</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 bg-slate-50">Enabled</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 bg-slate-50">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {requestBodyAttributes.map((attr) => {
+                        const mapping = requestBodyMappings[attr] || { mode: 'none', source: '', value: '', enabled: true };
+                        return (
+                          <tr key={attr} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-4 font-semibold text-slate-900">{attr}</td>
+                            <td className="px-4 py-4">
+                              <select
+                                className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                value={mapping.mode}
+                                onChange={(e) => {
+                                  setRequestBodyMappings({
+                                    ...requestBodyMappings,
+                                    [attr]: {
+                                      ...mapping,
+                                      mode: e.target.value,
+                                      source: '',
+                                      value: ''
+                                    }
+                                  });
+                                }}
+                              >
+                                <option value="none">None (use {'{{attributeName}}'})</option>
+                                <option value="response">From Response</option>
+                                <option value="manual">Manual Value</option>
+                                <option value="special">Special Value</option>
+                              </select>
+                            </td>
+                            <td className="px-4 py-4">
+                              {mapping.mode === 'response' && (
+                                <select
+                                  value={mapping.source || ''}
+                                  onChange={(e) => {
+                                    setRequestBodyMappings({
+                                      ...requestBodyMappings,
+                                      [attr]: { ...mapping, source: e.target.value }
+                                    });
+                                  }}
+                                  className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                  <option value="">-- Select Response Attribute --</option>
+                                  {Object.keys(responseAttributes).map(responseAttr => (
+                                    <option key={responseAttr} value={responseAttr}>
+                                      {responseAttr} ({responseAttributes[responseAttr]?.type || 'string'})
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                              {mapping.mode === 'manual' && (
+                                <input
+                                  type="text"
+                                  value={mapping.value || ''}
+                                  onChange={(e) => {
+                                    setRequestBodyMappings({
+                                      ...requestBodyMappings,
+                                      [attr]: { ...mapping, value: e.target.value }
+                                    });
+                                  }}
+                                  className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                              )}
+                              {mapping.mode === 'special' && (
+                                <select
+                                  value={mapping.source || ''}
+                                  onChange={(e) => {
+                                    setRequestBodyMappings({
+                                      ...requestBodyMappings,
+                                      [attr]: { ...mapping, source: e.target.value }
+                                    });
+                                  }}
+                                  className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                  <option value="">-- Select Special Value --</option>
+                                  <option value="attributeName">Attribute Name</option>
+                                  <option value="objectType">Object Type</option>
+                                  <option value="dataType">Data Type</option>
+                                  <option value="condition">Condition</option>
+                                  <option value="attributeValue">Attribute Value ({'{{attributeValue}}'})</option>
+                                </select>
+                              )}
+                              {mapping.mode === 'none' && (
+                                <span className="text-sm text-slate-500 italic">Will use {`{{${attr.split('.').pop()}}}`}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <input
+                                type="checkbox"
+                                checked={mapping.enabled !== false}
+                                onChange={(e) => {
+                                  setRequestBodyMappings({
+                                    ...requestBodyMappings,
+                                    [attr]: { ...mapping, enabled: e.target.checked }
+                                  });
+                                }}
+                                className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
+                              />
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <button
+                                onClick={() => {
+                                  const updatedAttributes = requestBodyAttributes.filter(a => a !== attr);
+                                  setRequestBodyAttributes(updatedAttributes);
+                                  
+                                  // Remove mapping for this attribute
+                                  const updatedMappings = { ...requestBodyMappings };
+                                  delete updatedMappings[attr];
+                                  setRequestBodyMappings(updatedMappings);
+                                }}
+                                className="inline-flex items-center justify-center w-8 h-8 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Remove this attribute"
+                              >
+                                <i className="bi bi-trash text-lg"></i>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
 
-              {/* Field Mapping Configuration */}
+          {/* Field Mapping Configuration - Show if response body has attributes */}
+          {responseBody && Object.keys(responseAttributes).length > 0 && (
               <div className="card-modern mb-6">
                 <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-4">
                   <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -1438,8 +1432,9 @@ const GridFiltering = () => {
                   </div>
                 </div>
               </div>
+          )}
 
-            {/* Section 4: Generate Collection */}
+          {/* Section 4: Generate Collection */}
             <div className="card-modern mb-6">
               <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -1484,8 +1479,6 @@ const GridFiltering = () => {
                 </button>
               </div>
             </div>
-            </>
-          )}
         </>
       )}
     </div>

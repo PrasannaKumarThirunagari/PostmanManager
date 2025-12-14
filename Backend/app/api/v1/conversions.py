@@ -9,6 +9,7 @@ import asyncio
 from pathlib import Path
 from datetime import datetime, date
 from app.config import settings
+from app.exceptions import FileOperationError, SwaggerParseError, ConversionError
 from app.application.services.swagger_parser_service import SwaggerParser
 from app.infrastructure.builders.postman_collection_builder import PostmanCollectionBuilder
 from app.application.services.security_test_service import SecurityTestService
@@ -1430,6 +1431,21 @@ async def convert_swagger_to_postman(
     except HTTPException:
         # Re-raise HTTP exceptions as-is
         raise
+    except (FileOperationError, SwaggerParseError) as e:
+        # Handle custom exceptions from SwaggerParser
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Swagger parsing/operation failed: {str(e)}", exc_info=True)
+        
+        if conversion_id in conversion_store:
+            conversion_store[conversion_id].update({
+                "status": "failed",
+                "message": str(e),
+                "error": str(e),
+                "failed_at": datetime.now().isoformat()
+            })
+        # Re-raise as HTTPException for proper API response
+        raise HTTPException(status_code=400, detail=str(e))
     except (ValueError, FileNotFoundError, IOError, OSError) as e:
         # Update conversion record with failure
         import logging

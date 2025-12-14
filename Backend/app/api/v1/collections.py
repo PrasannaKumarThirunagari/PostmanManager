@@ -631,6 +631,7 @@ class GenerateFilteredCollectionRequest(BaseModel):
     generate_all_conditions: Optional[bool] = True  # If true, generate all conditions for each attribute
     request_body_mappings: Optional[Dict[str, Dict[str, Any]]] = None  # {requestField: {mode, source, value, enabled}}
     custom_attributes: Optional[Dict[str, Dict[str, Any]]] = None  # {attributeName: {type, nullable, name}} - custom attributes added by user
+    custom_conditions: Optional[Dict[str, List[str]]] = None  # {attributeName: [customCondition1, customCondition2, ...]} - custom conditions per attribute
 
 
 def extract_flat_attributes(data: Any, prefix: str = "") -> Dict[str, Any]:
@@ -679,8 +680,47 @@ def extract_schema_metadata(data: Any) -> Dict[str, Any]:
     """
     Extract schema metadata from response body.
     Handles schema format where each attribute has metadata: {name, type, nullable, required, format}
+    Also handles array format: [{"attr": "Field1", "datatype": "string"}, ...]
     """
     attributes = {}
+    
+    # Handle array format: [{"attr": "Field1", "datatype": "string"}, ...]
+    if isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict):
+                # Check if it's the new array format with "attr" and "datatype"
+                if "attr" in item and "datatype" in item:
+                    attr_name = item.get("attr", "")
+                    datatype = item.get("datatype", "string")
+                    
+                    attributes[attr_name] = {
+                        "name": attr_name,
+                        "type": datatype,
+                        "nullable": item.get("nullable", False),
+                        "required": item.get("required", False),
+                        "path": attr_name
+                    }
+                    
+                    # Add format if present
+                    if "format" in item:
+                        attributes[attr_name]["format"] = item.get("format")
+                    
+                    # Add description if present
+                    if "description" in item:
+                        attributes[attr_name]["description"] = item.get("description")
+                    
+                    # Add default if present
+                    if "default" in item:
+                        attributes[attr_name]["default"] = item.get("default")
+                    
+                    # Add enum if present
+                    if "enum" in item:
+                        attributes[attr_name]["enum"] = item.get("enum")
+                else:
+                    # Regular array of objects - extract from first item
+                    if len(data) > 0:
+                        return extract_schema_metadata(data[0])
+        return attributes
     
     if isinstance(data, dict):
         for key, value in data.items():
@@ -716,6 +756,12 @@ def extract_schema_metadata(data: Any) -> Dict[str, Any]:
                 else:
                     # Nested object - recurse
                     nested = extract_schema_metadata(value)
+                    for nested_key, nested_value in nested.items():
+                        attributes[f"{key}.{nested_key}"] = nested_value
+            elif isinstance(value, list):
+                # Array - extract from first element if it's an object
+                if len(value) > 0 and isinstance(value[0], dict):
+                    nested = extract_schema_metadata(value[0])
                     for nested_key, nested_value in nested.items():
                         attributes[f"{key}.{nested_key}"] = nested_value
             else:
@@ -900,7 +946,15 @@ def generate_request_from_attribute(
                     request_body_data[request_field] = condition
                 elif source == "attributeValue":
                     request_body_data[request_field] = "{{attributeValue}}"
-            # mode == "none" means don't map this field (will use original value from request)
+            elif mode == "none":
+                # If not mapped, use {{attributeName}} template variable
+                # Convert field name to camelCase for variable name
+                field_name = request_field
+                # If it's a nested path (e.g., "filterOptions.sortBy"), use the last part
+                if "." in field_name:
+                    field_name = field_name.split(".")[-1]
+                # Use the field name as the variable name
+                request_body_data[request_field] = f"{{{{{field_name}}}}}"
     else:
         # Default hardcoded behavior (backward compatibility)
         request_body_data = {
@@ -949,22 +1003,81 @@ def generate_request_from_attribute(
                 except (json.JSONDecodeError, TypeError):
                     existing_body = {}
             
-            # Merge mapped values with existing body (only update mapped fields)
-            merged_body = {**existing_body}
+            # Merge mapped values with existing body while preserving original structure
+            # Deep copy the existing body to preserve nested structures (arrays, objects)
+            import copy
+            merged_body = copy.deepcopy(existing_body)
+            
+            # Helper function to set nested value preserving structure
+            def set_nested_value(obj: dict, path: str, value: Any) -> None:
+                """Set a value in a nested object using dot notation path."""
+                parts = path.split(".")
+                current = obj
+                for part in parts[:-1]:
+                    if part not in current:
+                        current[part] = {}
+                    elif not isinstance(current[part], dict):
+                        current[part] = {}
+                    current = current[part]
+                current[parts[-1]] = value
+            
+            # Process all mapped fields (including those with mode='none' that use {{attributeName}})
+            # Only update fields that are in the mappings AND exist in the original body
+            # This preserves the original structure and prevents adding unwanted fields
             for key, value in request_body_data.items():
-                # Handle nested paths (e.g., "user.name")
+                # Only process if this field is in the request_body_mappings
+                if key not in request_body_mappings:
+                    continue
+                
+                mapping = request_body_mappings[key]
+                mode = mapping.get("mode", "none")
+                
+                # Handle nested paths (e.g., "filterOptions.sortBy")
                 if "." in key:
+                    # Check if the nested path exists in the original body
                     parts = key.split(".")
-                    current = merged_body
+                    current = existing_body
+                    path_exists = True
                     for part in parts[:-1]:
-                        if part not in current:
-                            current[part] = {}
-                        elif not isinstance(current[part], dict):
-                            current[part] = {}
+                        if part not in current or not isinstance(current.get(part), dict):
+                            path_exists = False
+                            break
                         current = current[part]
-                    current[parts[-1]] = value
+                    if path_exists and parts[-1] in current:
+                        set_nested_value(merged_body, key, value)
                 else:
-                    merged_body[key] = value
+                    # For flat fields, only update if they exist in original body
+                    # This prevents adding unwanted root-level fields that weren't in the original
+                    if key in existing_body:
+                        # Get the original value to preserve its type
+                        original_value = existing_body[key]
+                        
+                        # If the value is a template variable (starts with {{), use it as-is
+                        # Otherwise, try to preserve the original data type
+                        if isinstance(value, str) and value.startswith("{{") and value.endswith("}}"):
+                            # Template variable - use as string
+                            merged_body[key] = value
+                        elif isinstance(original_value, (int, float)) and not isinstance(value, str):
+                            # Original was a number and new value is not a string - preserve number type
+                            merged_body[key] = value
+                        elif isinstance(original_value, (int, float)) and isinstance(value, str):
+                            # Original was a number but new value is string - check if it's a template
+                            if value.startswith("{{") and value.endswith("}}"):
+                                # Template variable - use as string
+                                merged_body[key] = value
+                            else:
+                                # Try to convert to number if possible
+                                try:
+                                    if isinstance(original_value, int):
+                                        merged_body[key] = int(value)
+                                    else:
+                                        merged_body[key] = float(value)
+                                except (ValueError, TypeError):
+                                    merged_body[key] = value
+                        else:
+                            # For other types (string, bool, etc.), use the new value
+                            merged_body[key] = value
+                    # If field doesn't exist in original, don't add it (prevents unwanted fields like attrFilter at root)
             
             body["raw"] = json.dumps(merged_body, indent=2)
     else:
@@ -1284,283 +1397,326 @@ async def generate_filtered_collection(request: GenerateFilteredCollectionReques
     from datetime import datetime
     logger = logging.getLogger(__name__)
     
-    collections_dir = Path(settings.postman_collections_dir)
-    source_collection_file = collections_dir / request.collection_id / f"{request.collection_id}.postman_collection.json"
-    
-    # Ensure path is within collections_dir (prevent path traversal)
-    source_collection_file = source_collection_file.resolve()
-    if not str(source_collection_file).startswith(str(collections_dir.resolve())):
-        raise HTTPException(status_code=400, detail="Invalid collection path")
-    
-    if not source_collection_file.exists():
-        raise HTTPException(status_code=404, detail="Source collection not found")
-    
-    # Load source collection
-    with open(source_collection_file, 'r', encoding='utf-8') as f:
-        source_collection = json.load(f)
-    
-    # Find the original request and its parent folder
-    original_request, parent_items = find_request_and_parent(
-        source_collection.get("item", []),
-        request.request_name,
-        request.request_method
-    )
-    
-    if not original_request:
-        raise HTTPException(status_code=404, detail="Request not found in collection")
-    
-    # If parent_items is None, use root items as fallback
-    if parent_items is None:
-        parent_items = source_collection.get("item", [])
-        logger.warning(f"Could not determine parent folder for request '{request.request_name}', using root items")
-    
-    # Extract attributes from response body (try schema metadata first)
-    schema_attributes = extract_schema_metadata(request.response_body)
-    
-    # If no schema metadata found, try regular extraction
-    if not schema_attributes or not any("type" in attr for attr in schema_attributes.values()):
-        # Fallback to regular extraction and convert to schema format
-        flat_attributes = extract_flat_attributes(request.response_body)
-        schema_attributes = {}
-        for key, attr_data in flat_attributes.items():
-            schema_attributes[key] = {
-                "name": key,
-                "type": attr_data.get("type", "string"),
-                "nullable": False,
-                "required": False,
-                "path": key
-            }
-    
-    # Merge custom attributes with schema attributes (custom attributes override if same name)
-    if request.custom_attributes:
-        for attr_name, attr_data in request.custom_attributes.items():
-            schema_attributes[attr_name] = {
-                "name": attr_data.get("name", attr_name),
-                "type": attr_data.get("type", "string"),
-                "nullable": attr_data.get("nullable", False),
-                "required": False,
-                "path": attr_name
-            }
-    
-    # Get object type (user-defined or default)
-    object_type = request.object_type or "Object"
-    
-    # Generate all filtering requests
-    generated_requests = []
-    
-    # Generate requests using iteration process
-    if request.generate_all_conditions or (request.selected_conditions and len(request.selected_conditions) > 0):
-        # Iterate through each attribute and generate requests for all conditions
-        for attribute_name, attribute_metadata in schema_attributes.items():
-            data_type = attribute_metadata.get("type", "string")
-            
-            # Get conditions for this attribute
-            if request.selected_conditions and attribute_name in request.selected_conditions:
-                # Use user-selected conditions (includes custom conditions)
-                conditions = request.selected_conditions[attribute_name]
-            else:
-                # Generate all conditions for this data type
-                conditions = get_conditions_for_type(data_type)
-                # Add custom conditions for this attribute if any
-                if request.custom_conditions and attribute_name in request.custom_conditions:
-                    for custom_cond in request.custom_conditions[attribute_name]:
-                        if custom_cond not in conditions:
-                            conditions.append(custom_cond)
-            
-            # Generate one request per condition
-            for condition in conditions:
-                generated_request = generate_request_from_attribute(
-                    original_request,
-                    attribute_name,
-                    attribute_metadata,
-                    condition,
-                    object_type,
-                    request.request_body_mappings,
-                    schema_attributes
-                )
-                generated_requests.append(generated_request)
-    elif request.filters and len(request.filters) > 0:
-        # Legacy mode: Generate filtered requests (one per filter condition)
-        response_attributes = extract_flat_attributes(request.response_body)
-        for filter_condition in request.filters:
-            cloned_request = clone_request_with_filters(
-                original_request,
-                filter_condition,
-                request.mappings,
-                response_attributes
-            )
-            generated_requests.append(cloned_request)
-    else:
-        # Fallback: Generate single request with mappings applied
-        response_attributes = extract_flat_attributes(request.response_body)
+    try:
+        collections_dir = Path(settings.postman_collections_dir)
+        source_collection_file = collections_dir / request.collection_id / f"{request.collection_id}.postman_collection.json"
         
-        cloned = copy.deepcopy(original_request)
-        cloned["name"] = f"{original_request.get('name', 'Request')}_Mapped"
+        # Ensure path is within collections_dir (prevent path traversal)
+        source_collection_file = source_collection_file.resolve()
+        if not str(source_collection_file).startswith(str(collections_dir.resolve())):
+            raise HTTPException(status_code=400, detail="Invalid collection path")
         
-        # Remove _postman_id from request items (only collection level should have it)
-        if "_postman_id" in cloned:
-            del cloned["_postman_id"]
+        if not source_collection_file.exists():
+            raise HTTPException(status_code=404, detail="Source collection not found")
         
-        # Remove response array if present
-        if "response" in cloned:
-            del cloned["response"]
+        # Load source collection
+        with open(source_collection_file, 'r', encoding='utf-8') as f:
+            source_collection = json.load(f)
+    
+        # Find the original request and its parent folder
+        original_request, parent_items = find_request_and_parent(
+            source_collection.get("item", []),
+            request.request_name,
+            request.request_method
+        )
         
-        request_obj = cloned.get("request", {})
-        method = request_obj.get("method", "").upper()
+        if not original_request:
+            raise HTTPException(status_code=404, detail="Request not found in collection")
         
-        # Apply mappings
-        for mapping in request.mappings:
-            source_value = response_attributes.get(mapping.responseAttribute, {}).get("value")
-            if source_value is not None:
-                if method in ["GET", "HEAD", "DELETE"]:
-                    url = request_obj.get("url", {})
-                    if "query" not in url:
-                        url["query"] = []
-                    query_param = next((q for q in url["query"] if q.get("key") == mapping.requestField), None)
-                    if query_param:
-                        query_param["value"] = str(source_value)
-                    else:
-                        url["query"].append({
-                            "key": mapping.requestField,
-                            "value": str(source_value),
-                            "type": "string"
-                        })
+        # If parent_items is None, use root items as fallback
+        if parent_items is None:
+            parent_items = source_collection.get("item", [])
+            logger.warning(f"Could not determine parent folder for request '{request.request_name}', using root items")
+        
+        # Extract attributes from response body (try schema metadata first)
+        schema_attributes = extract_schema_metadata(request.response_body)
+        
+        # If no schema metadata found, try regular extraction
+        if not schema_attributes or not any("type" in attr for attr in schema_attributes.values()):
+            # Fallback to regular extraction and convert to schema format
+            flat_attributes = extract_flat_attributes(request.response_body)
+            schema_attributes = {}
+            for key, attr_data in flat_attributes.items():
+                schema_attributes[key] = {
+                    "name": key,
+                    "type": attr_data.get("type", "string"),
+                    "nullable": False,
+                    "required": False,
+                    "path": key
+                }
+        
+        # Merge custom attributes with schema attributes (custom attributes override if same name)
+        if request.custom_attributes:
+            for attr_name, attr_data in request.custom_attributes.items():
+                schema_attributes[attr_name] = {
+                    "name": attr_data.get("name", attr_name),
+                    "type": attr_data.get("type", "string"),
+                    "nullable": attr_data.get("nullable", False),
+                    "required": False,
+                    "path": attr_name
+                }
+        
+        # Get object type (user-defined or default)
+        object_type = request.object_type or "Object"
+        
+        # Generate all filtering requests
+        generated_requests = []
+        
+        # Generate requests using iteration process
+        if request.generate_all_conditions or (request.selected_conditions and len(request.selected_conditions) > 0):
+            # Iterate through each attribute and generate requests for all conditions
+            for attribute_name, attribute_metadata in schema_attributes.items():
+                data_type = attribute_metadata.get("type", "string")
+                
+                # Get conditions for this attribute
+                if request.selected_conditions and attribute_name in request.selected_conditions:
+                    # Use user-selected conditions (includes custom conditions)
+                    conditions = request.selected_conditions[attribute_name]
                 else:
-                    body = request_obj.get("body", {})
-                    if not body:
-                        body = {
-                            "mode": "raw",
-                            "raw": "{}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                    # Generate all conditions for this data type
+                    conditions = get_conditions_for_type(data_type)
+                    # Add custom conditions for this attribute if any
+                    if request.custom_conditions and attribute_name in request.custom_conditions:
+                        for custom_cond in request.custom_conditions[attribute_name]:
+                            if custom_cond not in conditions:
+                                conditions.append(custom_cond)
+                
+                # Generate one request per condition
+                for condition in conditions:
+                    generated_request = generate_request_from_attribute(
+                        original_request,
+                        attribute_name,
+                        attribute_metadata,
+                        condition,
+                        object_type,
+                        request.request_body_mappings,
+                        schema_attributes
+                    )
+                    # Store attribute name in request for later grouping
+                    generated_request["_filter_attribute"] = attribute_name
+                    generated_requests.append(generated_request)
+        elif request.filters and len(request.filters) > 0:
+            # Legacy mode: Generate filtered requests (one per filter condition)
+            response_attributes = extract_flat_attributes(request.response_body)
+            for filter_condition in request.filters:
+                cloned_request = clone_request_with_filters(
+                    original_request,
+                    filter_condition,
+                    request.mappings,
+                    response_attributes
+                )
+                generated_requests.append(cloned_request)
+        else:
+            # Fallback: Generate single request with mappings applied
+            response_attributes = extract_flat_attributes(request.response_body)
+            
+            cloned = copy.deepcopy(original_request)
+            cloned["name"] = f"{original_request.get('name', 'Request')}_Mapped"
+            
+            # Remove _postman_id from request items (only collection level should have it)
+            if "_postman_id" in cloned:
+                del cloned["_postman_id"]
+            
+            # Remove response array if present
+            if "response" in cloned:
+                del cloned["response"]
+            
+            request_obj = cloned.get("request", {})
+            method = request_obj.get("method", "").upper()
+            
+            # Apply mappings
+            for mapping in request.mappings:
+                source_value = response_attributes.get(mapping.responseAttribute, {}).get("value")
+                if source_value is not None:
+                    if method in ["GET", "HEAD", "DELETE"]:
+                        url = request_obj.get("url", {})
+                        if "query" not in url:
+                            url["query"] = []
+                        query_param = next((q for q in url["query"] if q.get("key") == mapping.requestField), None)
+                        if query_param:
+                            query_param["value"] = str(source_value)
+                        else:
+                            url["query"].append({
+                                "key": mapping.requestField,
+                                "value": str(source_value),
+                                "type": "string"
+                            })
+                    else:
+                        body = request_obj.get("body", {})
+                        if not body:
+                            body = {
+                                "mode": "raw",
+                                "raw": "{}",
+                                "options": {
+                                    "raw": {
+                                        "language": "json"
+                                    }
                                 }
                             }
-                        }
-                        request_obj["body"] = body
-                    
-                    try:
-                        body_data = json.loads(body.get("raw", "{}"))
-                        if "." in mapping.requestField:
-                            parts = mapping.requestField.split(".")
-                            current = body_data
-                            for part in parts[:-1]:
-                                if part not in current:
-                                    current[part] = {}
-                                current = current[part]
-                            current[parts[-1]] = source_value
-                        else:
-                            body_data[mapping.requestField] = source_value
-                        body["raw"] = json.dumps(body_data, indent=2)
-                    except (json.JSONDecodeError, TypeError):
-                        body_data = {mapping.requestField: source_value}
-                        body["raw"] = json.dumps(body_data, indent=2)
+                            request_obj["body"] = body
+                        
+                        try:
+                            body_data = json.loads(body.get("raw", "{}"))
+                            if "." in mapping.requestField:
+                                parts = mapping.requestField.split(".")
+                                current = body_data
+                                for part in parts[:-1]:
+                                    if part not in current:
+                                        current[part] = {}
+                                    current = current[part]
+                                current[parts[-1]] = source_value
+                            else:
+                                body_data[mapping.requestField] = source_value
+                            body["raw"] = json.dumps(body_data, indent=2)
+                        except (json.JSONDecodeError, TypeError):
+                            body_data = {mapping.requestField: source_value}
+                            body["raw"] = json.dumps(body_data, indent=2)
+            
+            generated_requests.append(cloned)
         
-        generated_requests.append(cloned)
-    
-    # Calculate total requests generated
-    if request.generate_all_conditions or (request.selected_conditions and len(request.selected_conditions) > 0):
-        requests_count = 0
-        for attribute_name, attribute_metadata in schema_attributes.items():
-            data_type = attribute_metadata.get("type", "string")
-            if request.selected_conditions and attribute_name in request.selected_conditions:
-                conditions = request.selected_conditions[attribute_name]
-            else:
-                conditions = get_conditions_for_type(data_type)
-            requests_count += len(conditions)
-    elif request.filters and len(request.filters) > 0:
-        requests_count = len(request.filters)
-    else:
-        requests_count = 1
-    
-    # Validate generated requests
-    if not generated_requests:
-        raise HTTPException(status_code=400, detail="No requests were generated")
-    
-    # Ensure all generated requests are valid and remove _postman_id from them
-    for idx, item in enumerate(generated_requests):
-        if not isinstance(item, dict):
-            raise HTTPException(status_code=500, detail=f"Generated request at index {idx} is not a valid object")
-        if "name" not in item:
-            raise HTTPException(status_code=500, detail=f"Generated request at index {idx} is missing 'name' field")
-        if "request" not in item:
-            raise HTTPException(status_code=500, detail=f"Generated request at index {idx} is missing 'request' field")
-        # Remove _postman_id from request items (only collection level should have it)
-        if "_postman_id" in item:
-            del item["_postman_id"]
-    
-    # Create folder name: "{RequestName} Filtering"
-    folder_name = f"{request.request_name} Filtering"
-    
-    # Find if folder already exists in the parent items (where the request is located)
-    existing_folder = None
-    folder_index = None
-    
-    for idx, item in enumerate(parent_items):
-        # Check if it's a folder with the same name
-        if "item" in item and isinstance(item.get("item"), list) and item.get("name") == folder_name:
-            existing_folder = item
-            folder_index = idx
-            break
-    
-    # Create or update the filtering folder
-    if existing_folder:
-        # Replace existing folder with new one (remove old, add new)
-        parent_items.pop(folder_index)
-        logger.info(f"Replacing existing folder '{folder_name}' in parent folder")
-    
-    # Create new folder with all generated requests
-    filtering_folder = {
-        "name": folder_name,
-        "item": generated_requests
-    }
-    
-    # Add folder to the parent items (same location as the original request)
-    parent_items.append(filtering_folder)
-    
-    # Note: parent_items is a reference to the actual list in the collection structure,
-    # so modifying it automatically updates the collection. No need to reassign.
-    logger.info(f"Added '{folder_name}' folder to parent folder with {requests_count} requests")
-    
-    # Ensure collection has required structure
-    if "info" not in source_collection:
-        source_collection["info"] = {}
-    
-    # Ensure info has _postman_id (required for Postman import)
-    if "_postman_id" not in source_collection.get("info", {}):
-        source_collection["info"]["_postman_id"] = str(uuid.uuid4())
-        logger.info(f"Added _postman_id to collection info for '{request.collection_id}'")
-    
-    # Ensure variable is a list
-    if "variable" not in source_collection:
-        source_collection["variable"] = []
-    elif not isinstance(source_collection.get("variable"), list):
-        source_collection["variable"] = []
-    
-    # Save updated collection back to file
-    try:
-        with open(source_collection_file, 'w', encoding='utf-8') as f:
-            json.dump(source_collection, f, indent=2, ensure_ascii=False)
+        # Calculate total requests generated
+        if request.generate_all_conditions or (request.selected_conditions and len(request.selected_conditions) > 0):
+            requests_count = 0
+            for attribute_name, attribute_metadata in schema_attributes.items():
+                data_type = attribute_metadata.get("type", "string")
+                if request.selected_conditions and attribute_name in request.selected_conditions:
+                    conditions = request.selected_conditions[attribute_name]
+                else:
+                    conditions = get_conditions_for_type(data_type)
+                requests_count += len(conditions)
+        elif request.filters and len(request.filters) > 0:
+            requests_count = len(request.filters)
+        else:
+            requests_count = 1
         
-        # Verify the file was written correctly
-        if not source_collection_file.exists() or source_collection_file.stat().st_size == 0:
-            raise HTTPException(status_code=500, detail="Failed to save collection file")
+        # Validate generated requests
+        if not generated_requests:
+            raise HTTPException(status_code=400, detail="No requests were generated")
         
-        logger.info(f"Added '{folder_name}' folder with {requests_count} requests to collection '{request.collection_id}'")
-    except (IOError, OSError, json.JSONEncodeError) as e:
-        logger.error(f"Error saving collection '{request.collection_id}': {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error saving collection: {str(e)}")
+        # Ensure all generated requests are valid and remove _postman_id from them
+        for idx, item in enumerate(generated_requests):
+            if not isinstance(item, dict):
+                raise HTTPException(status_code=500, detail=f"Generated request at index {idx} is not a valid object")
+            if "name" not in item:
+                raise HTTPException(status_code=500, detail=f"Generated request at index {idx} is missing 'name' field")
+            if "request" not in item:
+                raise HTTPException(status_code=500, detail=f"Generated request at index {idx} is missing 'request' field")
+            # Remove _postman_id from request items (only collection level should have it)
+            if "_postman_id" in item:
+                del item["_postman_id"]
+        
+        # Create folder name: "{RequestName} Filtering"
+        folder_name = f"{request.request_name} Filtering"
+        
+        # Find if folder already exists in the parent items (where the request is located)
+        existing_folder = None
+        folder_index = None
+        
+        for idx, item in enumerate(parent_items):
+            # Check if it's a folder with the same name
+            if "item" in item and isinstance(item.get("item"), list) and item.get("name") == folder_name:
+                existing_folder = item
+                folder_index = idx
+                break
+        
+        # Create or update the filtering folder
+        if existing_folder:
+            # Replace existing folder with new one (remove old, add new)
+            parent_items.pop(folder_index)
+            logger.info(f"Replacing existing folder '{folder_name}' in parent folder")
+        
+        # Organize requests by attribute (field) into subfolders
+        # Group requests by attribute_name
+        requests_by_attribute = {}
+        for req in generated_requests:
+            # Get attribute name from stored metadata or extract from request name
+            attribute_name = req.get("_filter_attribute")
+            if not attribute_name:
+                # Fallback: Extract attribute name from request name (format: "RequestName_attributeName_condition")
+                req_name = req.get("name", "")
+                parts = req_name.split("_")
+                if len(parts) >= 2:
+                    attribute_name = parts[-2] if len(parts) > 2 else parts[1] if len(parts) > 1 else "Unknown"
+                else:
+                    attribute_name = "Unknown"
+            
+            # Remove the temporary metadata
+            if "_filter_attribute" in req:
+                del req["_filter_attribute"]
+            
+            if attribute_name not in requests_by_attribute:
+                requests_by_attribute[attribute_name] = []
+            requests_by_attribute[attribute_name].append(req)
+        
+        # Create subfolders for each attribute
+        attribute_folders = []
+        for attr_name, attr_requests in requests_by_attribute.items():
+            attribute_folder = {
+                "name": attr_name,
+                "item": attr_requests
+            }
+            attribute_folders.append(attribute_folder)
+        
+        # Create main filtering folder with attribute subfolders
+        filtering_folder = {
+            "name": folder_name,
+            "item": attribute_folders
+        }
+        
+        # Add folder to the parent items (same location as the original request)
+        parent_items.append(filtering_folder)
+        
+        # Note: parent_items is a reference to the actual list in the collection structure,
+        # so modifying it automatically updates the collection. No need to reassign.
+        logger.info(f"Added '{folder_name}' folder to parent folder with {requests_count} requests")
+        
+        # Ensure collection has required structure
+        if "info" not in source_collection:
+            source_collection["info"] = {}
+        
+        # Ensure info has _postman_id (required for Postman import)
+        if "_postman_id" not in source_collection.get("info", {}):
+            source_collection["info"]["_postman_id"] = str(uuid.uuid4())
+            logger.info(f"Added _postman_id to collection info for '{request.collection_id}'")
+        
+        # Ensure variable is a list
+        if "variable" not in source_collection:
+            source_collection["variable"] = []
+        elif not isinstance(source_collection.get("variable"), list):
+            source_collection["variable"] = []
+        
+        # Save updated collection back to file
+        try:
+            with open(source_collection_file, 'w', encoding='utf-8') as f:
+                json.dump(source_collection, f, indent=2, ensure_ascii=False)
+            
+            # Verify the file was written correctly
+            if not source_collection_file.exists() or source_collection_file.stat().st_size == 0:
+                raise HTTPException(status_code=500, detail="Failed to save collection file")
+            
+            logger.info(f"Added '{folder_name}' folder with {requests_count} requests to collection '{request.collection_id}'")
+        except (IOError, OSError, json.JSONEncodeError) as e:
+            logger.error(f"Error saving collection '{request.collection_id}': {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error saving collection: {str(e)}")
+        
+        collection_name = source_collection.get("info", {}).get("name", request.collection_id)
+        
+        return {
+            "message": f"Filtering folder '{folder_name}' added successfully to collection",
+            "collection_id": request.collection_id,
+            "name": collection_name,
+            "folder_name": folder_name,
+            "requests_generated": requests_count,
+            "file_path": str(source_collection_file)
+        }
     
-    collection_name = source_collection.get("info", {}).get("name", request.collection_id)
-    
-    return {
-        "message": f"Filtering folder '{folder_name}' added successfully to collection",
-        "collection_id": request.collection_id,
-        "name": collection_name,
-        "folder_name": folder_name,
-        "requests_generated": requests_count,
-        "file_path": str(source_collection_file)
-    }
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        # Catch any other unexpected errors
+        logger.error(f"Unexpected error in generate_filtered_collection: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error generating filtered collection: {str(e)}")
 
 
 class MergeCollectionsRequest(BaseModel):
