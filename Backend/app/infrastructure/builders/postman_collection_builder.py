@@ -1,16 +1,36 @@
 """
 Postman Collection Builder.
-Builds Postman Collection v2.1 format from Swagger data.
+
+Builds Postman Collection v2.1 format from Swagger data using the Builder pattern.
+This class provides a fluent interface for constructing Postman collections.
 """
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 
 class PostmanCollectionBuilder:
-    """Builder for Postman collections."""
+    """
+    Builder for Postman collections.
     
-    def __init__(self):
-        self.collection = {
+    Implements the Builder pattern to construct Postman Collection v2.1 format
+    objects step by step. Provides a fluent interface for building collections.
+    
+    Example:
+        >>> builder = PostmanCollectionBuilder()
+        >>> collection = (builder
+        ...     .set_info("My API", "API Description", "1.0.0")
+        ...     .set_auth("bearer", {"token": "{{authToken}}"})
+        ...     .add_request("Get Users", "GET", "{{baseUrl}}/users")
+        ...     .build())
+    """
+    
+    def __init__(self) -> None:
+        """
+        Initialize a new Postman collection builder.
+        
+        Creates an empty collection structure with default values.
+        """
+        self.collection: Dict[str, Any] = {
             "info": {
                 "name": "",
                 "description": "",
@@ -22,16 +42,35 @@ class PostmanCollectionBuilder:
             "variable": []
         }
     
-    def set_info(self, name: str, description: str = "", version: str = ""):
-        """Set collection info."""
+    def set_info(self, name: str, description: str = "", version: str = "") -> 'PostmanCollectionBuilder':
+        """
+        Set collection information.
+        
+        Args:
+            name: Collection name
+            description: Collection description (optional)
+            version: Collection version (optional)
+            
+        Returns:
+            Self for method chaining
+        """
         self.collection["info"]["name"] = name
         self.collection["info"]["description"] = description or ""
         if version:
             self.collection["info"]["version"] = version
         return self
     
-    def set_auth(self, auth_type: str, auth_values: Dict[str, Any]):
-        """Set collection-level authentication."""
+    def set_auth(self, auth_type: str, auth_values: Dict[str, Any]) -> 'PostmanCollectionBuilder':
+        """
+        Set collection-level authentication.
+        
+        Args:
+            auth_type: Authentication type ('apiKey', 'basic', 'bearer', 'jwt')
+            auth_values: Dictionary containing authentication values
+            
+        Returns:
+            Self for method chaining
+        """
         if not auth_type or not auth_values:
             return self
         
@@ -103,7 +142,16 @@ class PostmanCollectionBuilder:
         return self
     
     def get_auth_config(self, auth_type: str, auth_values: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Get authentication configuration for individual requests."""
+        """
+        Get authentication configuration for individual requests.
+        
+        Args:
+            auth_type: Authentication type ('apiKey', 'basic', 'bearer', 'jwt')
+            auth_values: Dictionary containing authentication values
+            
+        Returns:
+            Authentication configuration dictionary or None if invalid
+        """
         if not auth_type or not auth_values:
             return None
         
@@ -159,11 +207,28 @@ class PostmanCollectionBuilder:
         return None
     
     def add_request(self, name: str, method: str, url: str, 
-                   description: str = "", headers: List[Dict] = None,
-                   body: Optional[Dict] = None, params: List[Dict] = None,
-                   auth: Optional[Dict] = None, responses: List[Dict] = None,
-                   events: Optional[List[Dict]] = None):
-        """Add a request to the collection."""
+                   description: str = "", headers: Optional[List[Dict[str, Any]]] = None,
+                   body: Optional[Dict[str, Any]] = None, params: Optional[List[Dict[str, Any]]] = None,
+                   auth: Optional[Dict[str, Any]] = None, responses: Optional[List[Dict[str, Any]]] = None,
+                   events: Optional[List[Dict[str, Any]]] = None) -> 'PostmanCollectionBuilder':
+        """
+        Add a request to the collection.
+        
+        Args:
+            name: Request name
+            method: HTTP method (GET, POST, etc.)
+            url: Request URL (can include variables like {{baseUrl}})
+            description: Request description (optional)
+            headers: List of header dictionaries (optional)
+            body: Request body dictionary (optional)
+            params: List of query parameter dictionaries (optional)
+            auth: Authentication configuration (optional)
+            responses: List of response examples (optional)
+            events: List of pre-request/test scripts (optional)
+            
+        Returns:
+            Self for method chaining
+        """
         request = {
             "name": name,
             "request": {
@@ -194,8 +259,17 @@ class PostmanCollectionBuilder:
         self.collection["item"].append(request)
         return self
     
-    def add_folder(self, name: str, items: List[Dict] = None):
-        """Add a folder to the collection."""
+    def add_folder(self, name: str, items: Optional[List[Dict[str, Any]]] = None) -> 'PostmanCollectionBuilder':
+        """
+        Add a folder to the collection.
+        
+        Args:
+            name: Folder name
+            items: List of request or folder items (optional)
+            
+        Returns:
+            Self for method chaining
+        """
         folder = {
             "name": name,
             "item": items or []
@@ -203,8 +277,20 @@ class PostmanCollectionBuilder:
         self.collection["item"].append(folder)
         return self
     
-    def add_variable(self, key: str, value: str, variable_type: str = "string"):
-        """Add a collection-level variable."""
+    def add_variable(self, key: str, value: str, variable_type: str = "string") -> 'PostmanCollectionBuilder':
+        """
+        Add a collection-level variable.
+        
+        If the variable already exists, it will be updated with the new value.
+        
+        Args:
+            key: Variable name
+            value: Variable value
+            variable_type: Variable type (default: "string")
+            
+        Returns:
+            Self for method chaining
+        """
         # Check if variable already exists
         for var in self.collection["variable"]:
             if var.get("key") == key:
@@ -220,8 +306,19 @@ class PostmanCollectionBuilder:
         })
         return self
     
-    def set_base_url(self, base_url: str):
-        """Set the baseUrl collection variable."""
+    def set_base_url(self, base_url: str) -> 'PostmanCollectionBuilder':
+        """
+        Set the baseUrl collection variable.
+        
+        Extracts the domain portion from the URL and sets it as the baseUrl variable.
+        If the URL already contains a variable reference, this method does nothing.
+        
+        Args:
+            base_url: Base URL (e.g., "https://api.example.com")
+            
+        Returns:
+            Self for method chaining
+        """
         # Extract just the domain (protocol + host) from the base URL
         import re
         from urllib.parse import urlparse
@@ -244,11 +341,26 @@ class PostmanCollectionBuilder:
         return self
     
     def build(self) -> Dict[str, Any]:
-        """Build and return the collection."""
+        """
+        Build and return the completed collection.
+        
+        Returns:
+            Complete Postman Collection v2.1 format dictionary
+        """
         return self.collection
     
     def _parse_host(self, url: str) -> List[str]:
-        """Parse host from URL."""
+        """
+        Parse host from URL.
+        
+        Handles URLs with Postman variables (e.g., {{baseUrl}}).
+        
+        Args:
+            url: URL string to parse
+            
+        Returns:
+            List containing host portion of URL (empty list if parsing fails)
+        """
         try:
             from urllib.parse import urlparse
             import re
@@ -286,7 +398,17 @@ class PostmanCollectionBuilder:
         return []
     
     def _parse_path(self, url: str) -> List[str]:
-        """Parse path from URL."""
+        """
+        Parse path from URL.
+        
+        Handles URLs with Postman variables (e.g., {{baseUrl}}).
+        
+        Args:
+            url: URL string to parse
+            
+        Returns:
+            List of path segments (empty list if parsing fails)
+        """
         try:
             from urllib.parse import urlparse
             # Handle Postman variables in URL (e.g., {{baseUrl}})

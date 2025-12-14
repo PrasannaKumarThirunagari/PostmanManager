@@ -160,14 +160,24 @@ const GridFiltering = () => {
         mode: body.mode || 'raw'
       });
 
-      // Extract request body attributes for mapping
+      // Extract request body attributes for mapping (excluding array/object containers)
       if (parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody)) {
         const attributes = extractRequestBodyAttributes(parsedBody);
-        setRequestBodyAttributes(attributes);
+        // Filter out any attributes that are arrays or objects in the actual request body
+        const filteredAttributes = attributes.filter(attr => {
+          // Check if this attribute path points to an array or object in the actual body
+          const value = getNestedValue(parsedBody, attr);
+          // Only include if it's a primitive (string, number, boolean) or null/undefined
+          return value === null || value === undefined || 
+                 typeof value === 'string' || 
+                 typeof value === 'number' || 
+                 typeof value === 'boolean';
+        });
+        setRequestBodyAttributes(filteredAttributes);
         
         // Initialize mappings for each request body attribute
         const initialMappings = {};
-        attributes.forEach(attr => {
+        filteredAttributes.forEach(attr => {
           initialMappings[attr] = {
             mode: 'none', // 'none', 'response', 'manual', 'special'
             source: '', // response attribute name or special value
@@ -185,17 +195,36 @@ const GridFiltering = () => {
     }
   };
 
-  // Extract flat attributes from request body
+  // Helper function to get nested value from object using dot notation path
+  const getNestedValue = (obj, path) => {
+    if (!path || !obj) return undefined;
+    const parts = path.split('.');
+    let current = obj;
+    for (const part of parts) {
+      if (current === null || current === undefined) return undefined;
+      if (Array.isArray(current)) {
+        current = current[0]; // Get first element of array
+        if (current === null || current === undefined) return undefined;
+      }
+      if (typeof current !== 'object') return undefined;
+      current = current[part];
+    }
+    return current;
+  };
+
+  // Extract flat attributes from request body (excluding array/object container names)
   const extractRequestBodyAttributes = (data, prefix = '') => {
     const attributes = [];
     
     if (typeof data === 'object' && data !== null) {
       if (Array.isArray(data)) {
         // For arrays, extract from first element if it's an object
+        // But DON'T include the array name itself - only inner attributes
         if (data.length > 0 && typeof data[0] === 'object') {
           const nested = extractRequestBodyAttributes(data[0], prefix);
           attributes.push(...nested);
         }
+        // Skip array of primitives (don't include array name)
       } else {
         // For objects, extract all keys
         Object.keys(data).forEach(key => {
@@ -203,11 +232,18 @@ const GridFiltering = () => {
           const value = data[key];
           
           if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-            // Nested object - recurse
+            // Nested object - recurse (don't include the object name itself)
             const nested = extractRequestBodyAttributes(value, fullKey);
             attributes.push(...nested);
+          } else if (Array.isArray(value)) {
+            // Array - extract from first element if it's an object, but DON'T include array name
+            if (value.length > 0 && typeof value[0] === 'object') {
+              const nested = extractRequestBodyAttributes(value[0], prefix); // Keep prefix, don't add array name
+              attributes.push(...nested);
+            }
+            // Skip array of primitives (don't include array name)
           } else {
-            // Leaf attribute
+            // Leaf attribute (primitive: string, number, boolean) - include it
             attributes.push(fullKey);
           }
         });
@@ -727,11 +763,12 @@ const GridFiltering = () => {
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-slate-200">
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '20%' }}>Request Field</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '18%' }}>Request Field</th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '15%' }}>Mapping Mode</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '30%' }}>Source/Value</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '27%' }}>Source/Value</th>
                             <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '10%' }}>Enabled</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '25%' }}>Description</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '20%' }}>Description</th>
+                            <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider" style={{ width: '10%' }}>Action</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -837,6 +874,24 @@ const GridFiltering = () => {
                                     {mapping.mode === 'special' && 'Uses special system value'}
                                     {mapping.mode === 'none' && 'Not mapped - will use original value'}
                                   </span>
+                                </td>
+                                <td className="px-4 py-4 text-center">
+                                  <button
+                                    onClick={() => {
+                                      // Remove attribute from list
+                                      const updatedAttributes = requestBodyAttributes.filter(a => a !== attr);
+                                      setRequestBodyAttributes(updatedAttributes);
+                                      
+                                      // Remove mapping for this attribute
+                                      const updatedMappings = { ...requestBodyMappings };
+                                      delete updatedMappings[attr];
+                                      setRequestBodyMappings(updatedMappings);
+                                    }}
+                                    className="inline-flex items-center justify-center w-8 h-8 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Remove this attribute"
+                                  >
+                                    <i className="bi bi-trash text-lg"></i>
+                                  </button>
                                 </td>
                               </tr>
                             );

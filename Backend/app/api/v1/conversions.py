@@ -44,7 +44,11 @@ def json_serialize(obj):
 def extract_nested_string_fields(data: Any, prefix: str = "", max_depth: int = 10, current_depth: int = 0) -> List[str]:
     """
     Extract all string field paths from nested JSON structure using dot notation.
-    Returns list of field paths like: ['pageIndex', 'columnList.attributeName', 'columnList.attributeValue']
+    Ignores array/object container names and extracts only inner attributes.
+    
+    Example:
+        Input: {"columnList": [{"attrFilter": "", "attrName": ""}]}
+        Output: ["attrFilter", "attrName"]  (NOT "columnList.attrFilter")
     
     Args:
         data: The JSON data (dict, list, or primitive)
@@ -53,7 +57,7 @@ def extract_nested_string_fields(data: Any, prefix: str = "", max_depth: int = 1
         current_depth: Current nesting depth
     
     Returns:
-        List of field paths (strings)
+        List of field paths (strings) - only leaf string fields, excluding array/object names
     """
     if current_depth >= max_depth:
         return []
@@ -62,41 +66,44 @@ def extract_nested_string_fields(data: Any, prefix: str = "", max_depth: int = 1
     
     if isinstance(data, dict):
         for key, value in data.items():
-            full_path = f"{prefix}.{key}" if prefix else key
-            
+            # Don't add prefix for arrays/objects - only for nested objects that contain strings
             if isinstance(value, dict):
-                # Nested object - recurse
-                nested_fields = extract_nested_string_fields(value, full_path, max_depth, current_depth + 1)
+                # Nested object - recurse with prefix (for nested objects like {"a": {"b": "value"}})
+                nested_fields = extract_nested_string_fields(value, f"{prefix}.{key}" if prefix else key, max_depth, current_depth + 1)
                 string_fields.extend(nested_fields)
             elif isinstance(value, list) and len(value) > 0:
-                # Array - extract from first element if it's an object
+                # Array - extract from first element if it's an object, but IGNORE the array name
+                # This means we don't add the array key to the path
                 if isinstance(value[0], dict):
-                    nested_fields = extract_nested_string_fields(value[0], full_path, max_depth, current_depth + 1)
+                    # Extract fields from inside the array object, but keep the current prefix (don't add array name)
+                    nested_fields = extract_nested_string_fields(value[0], prefix, max_depth, current_depth + 1)
                     string_fields.extend(nested_fields)
                 elif SecurityTestService.is_string_field(value[0]):
-                    # Array of strings - include the array field itself
-                    string_fields.append(full_path)
+                    # Array of strings - skip (don't include array field itself)
+                    pass
             elif SecurityTestService.is_string_field(value):
-                # String field - add to list
+                # String field - add to list with current prefix
+                full_path = f"{prefix}.{key}" if prefix else key
                 string_fields.append(full_path)
     elif isinstance(data, list) and len(data) > 0:
-        # If it's an array, extract from first object
+        # If it's an array, extract from first object (keep current prefix, don't add array name)
         if isinstance(data[0], dict):
             return extract_nested_string_fields(data[0], prefix, max_depth, current_depth)
         elif SecurityTestService.is_string_field(data[0]):
-            if prefix:
-                string_fields.append(prefix)
+            # Array of strings - skip
+            pass
     
     return string_fields
 
 
 def set_nested_value(data: Dict[str, Any], path: str, value: Any) -> Dict[str, Any]:
     """
-    Set a value in a nested dictionary using dot notation path.
+    Set a value in a nested dictionary/array structure using dot notation path.
+    Handles arrays by searching for the field in array elements.
     
     Args:
         data: The dictionary to modify
-        path: Dot notation path (e.g., 'columnList.attributeName')
+        path: Dot notation path (e.g., 'attrFilter' or 'columnList.attrFilter')
         value: Value to set
     
     Returns:
@@ -109,16 +116,94 @@ def set_nested_value(data: Dict[str, Any], path: str, value: Any) -> Dict[str, A
     current = data
     
     # Navigate to the parent of the target field
-    for part in parts[:-1]:
+    for i, part in enumerate(parts[:-1]):
         if part not in current:
             current[part] = {}
+        elif isinstance(current[part], list) and len(current[part]) > 0:
+            # If it's an array, search in the first element
+            if isinstance(current[part][0], dict):
+                # Recursively set in the array element
+                remaining_path = '.'.join(parts[i+1:])
+                set_nested_value(current[part][0], remaining_path, value)
+                return data
+            else:
+                # Array of primitives - can't set nested value
+                return data
         elif not isinstance(current[part], dict):
             # If it's not a dict, replace it with a dict
             current[part] = {}
         current = current[part]
     
     # Set the final value
-    current[parts[-1]] = value
+    final_key = parts[-1]
+    
+    # If current is an array, set in first element
+    if isinstance(current, list) and len(current) > 0:
+        if isinstance(current[0], dict):
+            current[0][final_key] = value
+        else:
+            # Can't set in array of primitives
+            pass
+    elif isinstance(current, dict):
+        current[final_key] = value
+    
+    return data
+
+
+def find_and_set_nested_value(data: Dict[str, Any], field_name: str, value: Any) -> Dict[str, Any]:
+    """
+    Find a field in nested structure (including arrays) and set its value.
+    This handles cases where field_name doesn't include the array path.
+    
+    Example:
+        data = {"columnList": [{"attrFilter": ""}]}
+        field_name = "attrFilter"  (no columnList prefix)
+        Will find and set: data["columnList"][0]["attrFilter"] = value
+    """
+    if not field_name or not isinstance(data, dict):
+        return data
+    
+    # First, try direct path (if it includes array name)
+    if '.' in field_name:
+        return set_nested_value(data, field_name, value)
+    
+    # Otherwise, search for the field in the structure
+    def search_and_set(obj, target_field, target_value, visited=None):
+        if visited is None:
+            visited = set()
+        
+        obj_id = id(obj)
+        if obj_id in visited:
+            return False
+        visited.add(obj_id)
+        
+        if isinstance(obj, dict):
+            # Check if field exists at this level
+            if target_field in obj:
+                obj[target_field] = target_value
+                return True
+            
+            # Search in nested structures
+            for key, val in obj.items():
+                if isinstance(val, dict):
+                    if search_and_set(val, target_field, target_value, visited):
+                        return True
+                elif isinstance(val, list) and len(val) > 0:
+                    # Search in array elements
+                    for item in val:
+                        if isinstance(item, dict):
+                            if search_and_set(item, target_field, target_value, visited):
+                                return True
+        elif isinstance(obj, list):
+            for item in obj:
+                if isinstance(item, (dict, list)):
+                    if search_and_set(item, target_field, target_value, visited):
+                        return True
+        
+        return False
+    
+    # Search and set the value
+    search_and_set(data, field_name, value)
     
     return data
 
@@ -835,8 +920,8 @@ async def convert_swagger_to_postman(
                                         payload = SecurityTestService.XSS_PAYLOADS[0] if SecurityTestService.XSS_PAYLOADS else "<script>alert('XSS')</script>"
                                         # Create a copy of body_data
                                         variant_body_data = json.loads(body.get('raw', '{}'))
-                                        # Inject payload into the specific field (handles nested paths)
-                                        variant_body_data = set_nested_value(variant_body_data, field_path, payload)
+                                        # Inject payload into the specific field (handles nested paths and arrays)
+                                        variant_body_data = find_and_set_nested_value(variant_body_data, field_path, payload)
                                         
                                         # Serialize datetime objects
                                         variant_body_data = json_serialize(variant_body_data)
@@ -964,8 +1049,8 @@ async def convert_swagger_to_postman(
                                         payload = SecurityTestService.SQL_PAYLOADS[0] if SecurityTestService.SQL_PAYLOADS else "' OR '1'='1"
                                         # Create a copy of body_data
                                         variant_body_data = json.loads(body.get('raw', '{}'))
-                                        # Inject payload into the specific field (handles nested paths)
-                                        variant_body_data = set_nested_value(variant_body_data, field_path, payload)
+                                        # Inject payload into the specific field (handles nested paths and arrays)
+                                        variant_body_data = find_and_set_nested_value(variant_body_data, field_path, payload)
                                         
                                         # Serialize datetime objects
                                         variant_body_data = json_serialize(variant_body_data)
@@ -1094,8 +1179,8 @@ async def convert_swagger_to_postman(
                                         payload = SecurityTestService.HTML_PAYLOADS[0] if SecurityTestService.HTML_PAYLOADS else "<h1>Test</h1>"
                                         # Create a copy of body_data
                                         variant_body_data = json.loads(body.get('raw', '{}'))
-                                        # Inject payload into the specific field (handles nested paths)
-                                        variant_body_data = set_nested_value(variant_body_data, field_path, payload)
+                                        # Inject payload into the specific field (handles nested paths and arrays)
+                                        variant_body_data = find_and_set_nested_value(variant_body_data, field_path, payload)
                                         
                                         # Serialize datetime objects
                                         variant_body_data = json_serialize(variant_body_data)

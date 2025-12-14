@@ -2,12 +2,20 @@
 FastAPI application entry point.
 Main application setup with CORS, routes, and middleware.
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
 import os
+from typing import Dict, Any
 from app.config import settings
+from app.exceptions import (
+    SwaggerParseError,
+    PostmanCollectionError,
+    ValidationError,
+    FileOperationError,
+    ConversionError
+)
 from app.api.v1 import swagger, collections, conversions, health, environments, filtering_conditions, global_headers, status_scripts, documentation, default_api_configs, injection_responses, login_collection
 
 # Configure logging
@@ -93,13 +101,191 @@ else:
     logger.info("Frontend build not found - running in API-only mode (development)")
 
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    """Global exception handler."""
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+@app.exception_handler(SwaggerParseError)
+async def swagger_parse_error_handler(request: Request, exc: SwaggerParseError) -> JSONResponse:
+    """
+    Handle Swagger parsing errors.
+    
+    Args:
+        request: FastAPI request object
+        exc: SwaggerParseError exception
+        
+    Returns:
+        JSONResponse with error details
+    """
+    logger.error(f"Swagger parse error: {exc.message}", exc_info=True, extra={
+        "file_path": exc.file_path,
+        "detail": exc.detail
+    })
+    return JSONResponse(
+        status_code=400,
+        content={
+            "message": exc.message,
+            "error_code": "SWAGGER_PARSE_ERROR",
+            "detail": exc.detail if settings.debug else None
+        }
+    )
+
+
+@app.exception_handler(PostmanCollectionError)
+async def postman_collection_error_handler(request: Request, exc: PostmanCollectionError) -> JSONResponse:
+    """
+    Handle Postman collection errors.
+    
+    Args:
+        request: FastAPI request object
+        exc: PostmanCollectionError exception
+        
+    Returns:
+        JSONResponse with error details
+    """
+    logger.error(f"Postman collection error: {exc.message}", exc_info=True, extra={
+        "collection_id": exc.collection_id,
+        "detail": exc.detail
+    })
+    return JSONResponse(
+        status_code=400,
+        content={
+            "message": exc.message,
+            "error_code": "POSTMAN_COLLECTION_ERROR",
+            "detail": exc.detail if settings.debug else None
+        }
+    )
+
+
+@app.exception_handler(ValidationError)
+async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
+    """
+    Handle validation errors.
+    
+    Args:
+        request: FastAPI request object
+        exc: ValidationError exception
+        
+    Returns:
+        JSONResponse with error details
+    """
+    logger.warning(f"Validation error: {exc.message}", extra={
+        "field": exc.field,
+        "detail": exc.detail
+    })
+    return JSONResponse(
+        status_code=422,
+        content={
+            "message": exc.message,
+            "error_code": "VALIDATION_ERROR",
+            "field": exc.field,
+            "detail": exc.detail if settings.debug else None
+        }
+    )
+
+
+@app.exception_handler(FileOperationError)
+async def file_operation_error_handler(request: Request, exc: FileOperationError) -> JSONResponse:
+    """
+    Handle file operation errors.
+    
+    Args:
+        request: FastAPI request object
+        exc: FileOperationError exception
+        
+    Returns:
+        JSONResponse with error details
+    """
+    logger.error(f"File operation error: {exc.message}", exc_info=True, extra={
+        "file_path": exc.file_path,
+        "detail": exc.detail
+    })
     return JSONResponse(
         status_code=500,
-        content={"message": "Internal server error", "detail": str(exc)}
+        content={
+            "message": exc.message,
+            "error_code": "FILE_OPERATION_ERROR",
+            "detail": exc.detail if settings.debug else None
+        }
+    )
+
+
+@app.exception_handler(ConversionError)
+async def conversion_error_handler(request: Request, exc: ConversionError) -> JSONResponse:
+    """
+    Handle conversion errors.
+    
+    Args:
+        request: FastAPI request object
+        exc: ConversionError exception
+        
+    Returns:
+        JSONResponse with error details
+    """
+    logger.error(f"Conversion error: {exc.message}", exc_info=True, extra={
+        "conversion_id": exc.conversion_id,
+        "detail": exc.detail
+    })
+    return JSONResponse(
+        status_code=500,
+        content={
+            "message": exc.message,
+            "error_code": "CONVERSION_ERROR",
+            "detail": exc.detail if settings.debug else None
+        }
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    """
+    Handle HTTP exceptions from FastAPI.
+    
+    Args:
+        request: FastAPI request object
+        exc: HTTPException
+        
+    Returns:
+        JSONResponse with error details
+    """
+    logger.warning(f"HTTP exception: {exc.status_code} - {exc.detail}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "message": exc.detail,
+            "error_code": f"HTTP_{exc.status_code}"
+        }
+    )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """
+    Global exception handler for all unhandled exceptions.
+    Sanitizes error messages to prevent information disclosure.
+    
+    Args:
+        request: FastAPI request object
+        exc: Exception that was raised
+        
+    Returns:
+        JSONResponse with sanitized error message
+    """
+    # Log the full exception with stack trace
+    logger.error(f"Unhandled exception: {type(exc).__name__}", exc_info=True, extra={
+        "path": str(request.url),
+        "method": request.method
+    })
+    
+    # Return sanitized error message (don't expose internal details)
+    error_message = "An internal server error occurred"
+    if settings.debug:
+        # Only show detailed error in debug mode
+        error_message = f"Internal server error: {str(exc)}"
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "message": error_message,
+            "error_code": "INTERNAL_SERVER_ERROR",
+            "detail": str(exc) if settings.debug else None
+        }
     )
 
 
